@@ -3,6 +3,7 @@
 #include <limits>
 #include <cmath>
 #include <set>
+#include <sstream>
 
 typedef std::pair<int, int> Vertex;
 
@@ -69,10 +70,22 @@ int main(int argc, char *argv[]) {
 		}
 	}
 
+    std::ostringstream graph_filename;
+    graph_filename << "k-neargraph_" << s << "_" << n << "_" << k << "_";
+
+    int filename_num = 1;
+    FILE *graph_file;
+
+    while ((graph_file = fopen((graph_filename.str() + std::to_string(filename_num) + ".txt").c_str(), "r")) != nullptr)
+        filename_num++;
+    fclose(graph_file);
+
+    graph_file = fopen((graph_filename.str() + std::to_string(filename_num) + ".txt").c_str(), "w");
+
 	// print graph to stdout
-	printf("%d\n", n); // print number of vertices
+	fprintf(graph_file, "%d\n", n); // print number of vertices
 	for (i = 0; i < n; i++) {
-		printf("%d %d\n", vertex_vector[i].first, vertex_vector[i].second); // print vertex coordinates
+		fprintf(graph_file, "%d %d\n", vertex_vector[i].first, vertex_vector[i].second); // print vertex coordinates
 	}
 	// for each row in weights print k lowest values
 	std::cerr << "Looking for k-neighbors..." << std::endl;
@@ -84,14 +97,14 @@ int main(int argc, char *argv[]) {
 					min = ii;
 				}
 			}
-			printf("%d %d %lf\n", i, min, weights[i][min]); // print edge (first vertex, second vertex, weight)
+			fprintf(graph_file, "%d %d %lf\n", i, min, weights[i][min]); // print edge (first vertex, second vertex, weight)
 			weights[i][min] = MAX_DOUBLE;
 		}
 	}
 
 	// TODO check if graph is connected
-	// TODO print to file instead of stdout
 
+    fclose(graph_file);
 	std::cerr << "Done!" << std::endl;
 
 	return 0;
