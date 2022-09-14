@@ -35,7 +35,7 @@ int main(int argc, char *argv[]) {
 	// init random distribution
 	std::random_device dev;
 	std::mt19937 rng(dev());
-	std::uniform_int_distribution<std::mt19937::result_type> dist(1, s - 1);
+	std::uniform_int_distribution<std::mt19937::result_type> dist(0, s - 1);
 
 	// generate n random unique points
 	std::cerr << "Generating random vertexes..." << std::endl;
