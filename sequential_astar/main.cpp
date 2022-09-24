@@ -1,41 +1,31 @@
 #include <iostream>
 #include <utility>
-#include <boost/graph/graph_traits.hpp>
-#include <boost/graph/adjacency_list.hpp>
-#include <boost/graph/dijkstra_shortest_paths.hpp>
-#include <boost/graph/graphviz.hpp>
 #include <queue>
 #include <cfloat> // Needed to use DBL_MAX
 
+#include "../include/graph_utils/graph_utils.h"
+
 using namespace boost;
 
-typedef struct {
-	unsigned int x;
-	unsigned int y;
-} VertexPosition;
-
-typedef property<edge_weight_t, double> EdgeWeightProperty;
-typedef adjacency_list<vecS, vecS, undirectedS, VertexPosition, EdgeWeightProperty> Graph;
-typedef std::pair<unsigned int, unsigned int> Edge;
-
-char *filename;
-
 // Reconstruct path from graph and list of costs to nodes
-std::vector<unsigned int>
+std::pair<double, std::vector<unsigned int>>
 reconstruct_path(const Graph &g, unsigned int source, unsigned int target, std::vector<unsigned int> &cameFrom) {
+	double path_weight = 0;
 	std::vector<unsigned int> path;
 	path.emplace_back(target);
 	unsigned int current = target;
 	while (current != source) {
 		current = cameFrom[current];
+		path_weight += get(edge_weight, g, edge(current, target, g).first);
+		target = current;
 		path.insert(path.begin(), current);
 	}
-	return path;
+	return std::make_pair(path_weight, path);
 }
 
-// TODO: check for unsigned int / unsigned long long
 // Find the best path from source to target node. Prints the results on file
-void astar_sequential(const Graph &g, unsigned int source, unsigned int target) {
+std::pair<double, std::vector<unsigned int>>
+astar_sequential(const Graph &g, unsigned int source, unsigned int target) {
 	std::priority_queue<std::pair<unsigned int, unsigned int>, std::vector<std::pair<unsigned int, unsigned int>>, std::greater<>> openSet;
 	std::set<unsigned int> closedSet;
 	unsigned long long V = num_vertices(g);
@@ -51,18 +41,8 @@ void astar_sequential(const Graph &g, unsigned int source, unsigned int target) 
 		openSet.pop();
 		if (curr == target) {
 			// Reconstructing path
-			std::vector<unsigned int> path = reconstruct_path(g, source, target, cameFrom);
-			char *fout_filename = (char *) malloc((strlen(filename) + 8) * sizeof(char));
-			sprintf(fout_filename, "%s.solution", filename);
-			FILE *fout = fopen(fout_filename, "w");
-			for (auto el: path) {
-				std::cout << el << " -> ";
-				fprintf(fout, "%d\n", el);
-			}
-			fclose(fout);
-			std::cout << std::endl;
-			printf("FINISHED ASTAR");
-			return;
+			auto path = reconstruct_path(g, source, target, cameFrom);
+			return path;
 		}
 		if (closedSet.find(curr) != closedSet.end())
 			continue;
@@ -89,48 +69,40 @@ void astar_sequential(const Graph &g, unsigned int source, unsigned int target) 
 			openSet.push(std::make_pair(e.m_target, fcost));
 		}
 	}
-}
 
-// Read graph from file. Graph should be generated from graph_generation script
-Graph read_graph(char *fin_filename) {
-	FILE *fin = fopen(fin_filename, "r");
-	unsigned int n_nodes;
-	fscanf(fin, "%d", &n_nodes);
-	Graph g(n_nodes);
-	unsigned int x, y;
-	for (int i = 0; i < n_nodes; i++) {
-		fscanf(fin, "%d %d", &x, &y);
-		g[i].x = x;
-		g[i].y = y;
-	}
-	unsigned int node1, node2;
-	double weight;
-	while (fscanf(fin, "%d %d %lf", &node1, &node2, &weight) == 3) {
-		add_edge(node1, node2, EdgeWeightProperty(weight), g);
-	}
-	return g;
-}
-
-// Print graph on the provided output stream using graphviz.
-// The graph that can be rendered on: https://dreampuf.github.io/GraphvizOnline
-void print_graph(Graph g, std::ostream &os) {
-	dynamic_properties dp;
-	dp.property("node_id", get(vertex_index, g));
-	dp.property("weight", get(edge_weight, g));
-	write_graphviz_dp(os, g, dp);
+	return std::make_pair(-1, std::vector<unsigned int>());
 }
 
 int main(int argc, char *argv[]) {
 	if (argc < 2) {
 		std::cerr << "Usage: " << argv[0] << " FILENAME" << std::endl;
-		return -1;
+		return 1;
 	}
-	filename = argv[1];
+	char* filename = argv[1];
 	Graph g = read_graph(filename);
-//    print_graph(g, std::cout);
 
 	unsigned int N = num_vertices(g);
-	astar_sequential(g, 0, N - 1);
+	auto path_pair = astar_sequential(g, 0, N - 1);
+	auto path_weight = path_pair.first;
+	auto path = path_pair.second;
+
+	if (path_weight < 0) {
+		std::cout << "Unable to find a path" << std::endl;
+		return 2;
+	}
+
+	// Print path
+	std::cout << path_weight << std::endl;
+	char *fout_filename = (char *) malloc((strlen(filename) + 8) * sizeof(char));
+	sprintf(fout_filename, "%s.solution", filename);
+	FILE *fout = fopen(fout_filename, "w");
+	for (auto el: path) {
+		std::cout << el << " -> ";
+		fprintf(fout, "%d\n", el);
+	}
+	fclose(fout);
+	std::cout << std::endl;
+	printf("FINISHED ASTAR");
 
 	return 0;
 }
