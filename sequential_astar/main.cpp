@@ -7,6 +7,8 @@
 
 using namespace boost;
 
+typedef std::pair<unsigned int, double> NodeFCost;
+
 // Reconstruct path from graph and list of costs to nodes
 std::pair<double, std::vector<unsigned int>>
 reconstruct_path(const Graph &g, unsigned int source, unsigned int target, std::vector<unsigned int> &cameFrom) {
@@ -26,17 +28,18 @@ reconstruct_path(const Graph &g, unsigned int source, unsigned int target, std::
 // Find the best path from source to target node. Prints the results on file
 std::pair<double, std::vector<unsigned int>>
 astar_sequential(const Graph &g, unsigned int source, unsigned int target) {
-	std::priority_queue<std::pair<unsigned int, unsigned int>, std::vector<std::pair<unsigned int, unsigned int>>, std::greater<>> openSet;
+	auto comp = [](NodeFCost a, NodeFCost b) { return a.second > b.second; };
+	std::priority_queue<NodeFCost, std::vector<NodeFCost>, decltype(comp)> openSet;
 	std::set<unsigned int> closedSet;
 	unsigned long long V = num_vertices(g);
 	std::vector<double> costToCome(V, DBL_MAX);
 	std::vector<unsigned int> cameFrom(V);
 
 	costToCome[source] = 0;
-	openSet.push(std::make_pair(source, 0));
+	openSet.push(NodeFCost(source, 0));
 
 	while (!openSet.empty()) {
-		std::pair<unsigned int, unsigned int> curr_pair = openSet.top();
+		NodeFCost curr_pair = openSet.top();
 		unsigned int curr = curr_pair.first;
 		openSet.pop();
 		if (curr == target) {
@@ -59,14 +62,14 @@ astar_sequential(const Graph &g, unsigned int source, unsigned int target) {
 			unsigned int edge_y = g[e.m_target].y;
 
 			// The distance is the norm2 between the 2 points in the matrix
-			double dist = sqrt(pow(edge_x - curr_x, 2) + pow(edge_y - curr_y, 2));
+			double dist = sqrt(pow((double)edge_x - (double)curr_x, 2) + pow((double)edge_y - (double)curr_y, 2));
 
 			double fcost = gcost + dist;
 			if (gcost > costToCome[e.m_target])
 				continue;
 			cameFrom[e.m_target] = curr;
 			costToCome[e.m_target] = gcost;
-			openSet.push(std::make_pair(e.m_target, fcost));
+			openSet.push(NodeFCost(e.m_target, fcost));
 		}
 	}
 
