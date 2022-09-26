@@ -54,22 +54,13 @@ astar_sequential(const Graph &g, unsigned int source, unsigned int target) {
 			auto edge_w = get(edge_weight, g, e);
 			if (closedSet.find(e.m_target) != closedSet.end())
 				continue;
-			double gcost = costToCome[curr] + edge_w;
-
-			unsigned int curr_x = g[curr].x;
-			unsigned int curr_y = g[curr].y;
-			unsigned int edge_x = g[e.m_target].x;
-			unsigned int edge_y = g[e.m_target].y;
-
-			// The distance is the norm2 between the 2 points in the matrix
-			double dist = sqrt(pow((double)edge_x - (double)curr_x, 2) + pow((double)edge_y - (double)curr_y, 2));
-
-			double fcost = gcost + dist;
-			if (gcost > costToCome[e.m_target])
+			double gCost = costToCome[curr] + edge_w;
+			double fCost = gCost + calc_h_cost(g, e.m_target, target);
+			if (gCost > costToCome[e.m_target])
 				continue;
 			cameFrom[e.m_target] = curr;
-			costToCome[e.m_target] = gcost;
-			openSet.push(NodeFCost(e.m_target, fcost));
+			costToCome[e.m_target] = gCost;
+			openSet.push(NodeFCost(e.m_target, fCost));
 		}
 	}
 

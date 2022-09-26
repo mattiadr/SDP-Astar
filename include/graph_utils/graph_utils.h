@@ -11,6 +11,8 @@ typedef struct {
 	unsigned int y;
 } VertexPosition;
 
+typedef unsigned int NodeId;
+
 typedef property<edge_weight_t, double> EdgeWeightProperty;
 typedef adjacency_list<vecS, vecS, undirectedS, VertexPosition, EdgeWeightProperty> Graph;
 typedef std::pair<unsigned int, unsigned int> Edge;
@@ -42,6 +44,20 @@ void print_graph(Graph g, std::ostream &os) {
 	dp.property("node_id", get(vertex_index, g));
 	dp.property("weight", get(edge_weight, g));
 	write_graphviz_dp(os, g, dp);
+}
+
+double calc_h_cost(const Graph &g, NodeId source, NodeId dest) {
+	double src_x = g[source].x;
+	double src_y = g[source].y;
+	double dst_x = g[dest].x;
+	double dst_y = g[dest].y;
+
+	// The distance is the norm2 between the 2 points in the matrix
+	return sqrt(pow(dst_x - src_x, 2) + pow(dst_y - src_y, 2));
+}
+
+unsigned int hash_node_id(NodeId id, unsigned int nThreads) {
+	return id % nThreads;
 }
 
 #endif
