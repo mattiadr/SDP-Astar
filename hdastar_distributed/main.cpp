@@ -1,11 +1,12 @@
 #include <queue>
 #include <barrier>
+#include <mutex>
+#include <condition_variable>
 #include <boost/lockfree/queue.hpp>
 
 #include "../include/graph_utils/graph_utils.h"
 
 #define N_THREADS 16
-#define FREELIST_SIZE 1024
 
 using namespace boost;
 
@@ -35,27 +36,45 @@ typedef struct {
 const auto queue_comparator = [](NodeFCost a, NodeFCost b) { return a.second > b.second; };
 
 std::vector<std::thread> threads(N_THREADS);
-std::vector<std::unique_ptr<lockfree::queue<Message>>> messageQueues(N_THREADS);
-std::barrier barrier(N_THREADS);
-std::vector<bool> finished(N_THREADS);
+std::vector<std::mutex> messageMutexes (N_THREADS);
+std::vector<std::queue<Message>> messageQueues(N_THREADS);
 std::vector<NodeId> path;
+double pathLength;
+
+int sumFlag = 0;
+std::mutex mutex;
+std::condition_variable cv;
+std::barrier barrier(N_THREADS);
 
 /** functions **/
 
-void broadcast_message(Message m, unsigned int senderId) {
-	for (int i = 0; i < N_THREADS; i++) {
-		if (i == senderId) continue;
-		messageQueues[i]->push(m);
+bool message_check_empty(unsigned int threadId) {
+	std::unique_lock<std::mutex> lock(messageMutexes[threadId]);
+	return messageQueues[threadId].empty();
+}
+
+bool message_receive(unsigned int threadId, Message &m) {
+	std::unique_lock<std::mutex> lock(messageMutexes[threadId]);
+	if (messageQueues[threadId].empty()) {
+		return false;
+	} else {
+		m = messageQueues[threadId].front();
+		messageQueues[threadId].pop();
+		return true;
 	}
 }
 
-bool has_finished() {
+void message_send(unsigned int threadId, Message m) {
+	std::unique_lock<std::mutex> lock(messageMutexes[threadId]);
+	messageQueues[threadId].push(m);
+}
+
+void message_broadcast(unsigned int senderId, Message m) {
 	for (int i = 0; i < N_THREADS; i++) {
-		if (!finished[i]) {
-			return false;
-		}
+		if (i == senderId) continue;
+		std::unique_lock<std::mutex> lock(messageMutexes[i]);
+		messageQueues[i].push(m);
 	}
-	return true;
 }
 
 void
@@ -68,7 +87,7 @@ hdastar_distributed(unsigned int threadId, const Graph &g, NodeId pathStart, Nod
 
 	while (true) {
 		// empty message queue
-		while (messageQueues[threadId]->pop(m)) {
+		while (message_receive(threadId, m)) {
 			switch (m.type) {
 				// move work messages to open set if no duplicates
 				case WORK:
@@ -85,27 +104,30 @@ hdastar_distributed(unsigned int threadId, const Graph &g, NodeId pathStart, Nod
 					std::cout << "Target Reached!" << std::endl;
 					break;
 				default:
-					std::cerr << "WORK " << threadId << " : Invalid message type: " << m.type << std::endl;
+					std::cerr << "WORK thread " << threadId << " : Invalid message type: " << m.type << std::endl;
 			}
 		}
 
 		// termination condition
 		if (openSet.empty()) {
-			barrier.arrive_and_wait();
-			// set finished flag
-			finished[threadId] = messageQueues[threadId]->empty();
-			barrier.arrive_and_wait();
-
-			if (threadId == 0) {
-				for (int i = 0; i < N_THREADS; i++) {
-					std::cout << finished[i] << ", ";
-				}
-				std::cout << std::endl;
+			std::unique_lock lk(mutex);
+			sumFlag++;
+			if (sumFlag >= N_THREADS) {
+				cv.notify_all();
+				lk.unlock();
+				break;
 			}
-			// check if all threads finished working, otherwise continue
-			if (has_finished()) {
+
+			cv.wait(lk, [threadId]{ return !message_check_empty(threadId) || sumFlag >= N_THREADS; });
+			if (!message_check_empty(threadId)) {
+				sumFlag--;
+				lk.unlock();
+				continue;
+			} else if (sumFlag >= N_THREADS) {
+				lk.unlock();
 				break;
 			} else {
+				lk.unlock();
 				continue;
 			}
 		}
@@ -137,24 +159,26 @@ hdastar_distributed(unsigned int threadId, const Graph &g, NodeId pathStart, Nod
 					cameFrom.insert_or_assign((NodeId) neighbor.m_target, n.first);
 				}
 			} else {
-				// create message
-				Message outgoing{WORK, (NodeId) neighbor.m_target, n.first, fCost, gCost};
 				// send message
-				messageQueues[targetThread]->push(outgoing);
+				message_send(targetThread, Message{WORK, (NodeId) neighbor.m_target, n.first, fCost, gCost});
+				cv.notify_all();
 			}
 		}
 	}
 
+	barrier.arrive_and_wait();
+
 	// Path Reconstruction
 	if (hash_node_id(pathEnd, N_THREADS) == threadId) {
-		messageQueues[threadId]->push(Message{PATH_RECONSTRUCTION, pathEnd});
+		pathLength = costToCome.at(pathEnd);
+		message_send(threadId, Message{PATH_RECONSTRUCTION, pathEnd});
 	}
 
 	NodeId prev;
 	unsigned int prevThread;
 
 	while (true) {
-		if (!messageQueues[threadId]->pop(m)) {
+		if (!message_receive(threadId, m)) {
 			continue;
 		}
 
@@ -163,18 +187,18 @@ hdastar_distributed(unsigned int threadId, const Graph &g, NodeId pathStart, Nod
 				path.insert(path.begin(), m.target);
 
 				if (m.target == pathStart) {
-					broadcast_message(Message{PATH_END}, threadId);
+					message_broadcast(threadId, Message{PATH_END});
 					return;
 				} else {
 					prev = cameFrom.at(m.target);
 					prevThread = hash_node_id(prev, N_THREADS);
-					messageQueues[prevThread]->push(Message{PATH_RECONSTRUCTION, prev});
+					message_send(prevThread, Message{PATH_RECONSTRUCTION, prev});
 				}
 				break;
 			case PATH_END:
 				return;
 			default:
-				std::cerr << "PATH RECONSTRUCTION " << threadId << " : Invalid message type: " << m.type << std::endl;
+				std::cerr << "PATH RECONSTRUCTION thread " << threadId << " : Invalid message type: " << m.type << std::endl;
 		}
 	}
 }
@@ -189,11 +213,11 @@ int main(int argc, char *argv[]) {
 	unsigned int N = num_vertices(g);
 
 	for (int i = 0; i < N_THREADS; i++) {
-		messageQueues[i] = std::make_unique<lockfree::queue<Message>>(FREELIST_SIZE);
+		messageQueues[i] = std::queue<Message>();
 	}
 
 	Message m{WORK, (NodeId) 0, (NodeId) 0, 0, 0};
-	messageQueues[hash_node_id(0, N_THREADS)]->push(m);
+	message_send(hash_node_id(0, N_THREADS), m);
 
 	for (int i = 0; i < N_THREADS; i++) {
 		threads[i] = std::thread(hdastar_distributed, i, g, 0, N - 1);
@@ -207,4 +231,5 @@ int main(int argc, char *argv[]) {
 		std::cout << node << " -> ";
 	}
 	std::cout << std::endl;
+	std::cout << pathLength << std::endl;
 }
