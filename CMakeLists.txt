@@ -6,7 +6,7 @@ project(hdastar_distributed)
 set(CMAKE_CXX_STANDARD 20)
 
 add_executable(graph_generation graph_generation/main.cpp)
-add_executable(sequential_astar sequential_astar/main.cpp include/graph_utils/graph_utils.h)
+add_executable(sequential_astar sequential_astar/main.cpp)
 add_executable(hdastar_distributed hdastar_distributed/main.cpp)
 set(Boost_INCLUDE_DIR include/boost_1_80_0/)
 set(Boost_LIBRARY_DIR include/boost_1_80_0/libs)
