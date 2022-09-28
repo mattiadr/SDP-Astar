@@ -6,8 +6,9 @@
 #include <boost/lockfree/queue.hpp>
 
 #include "../include/graph_utils/graph_utils.h"
+#include "../include/stats/stats.h"
 
-#define N_THREADS 16
+#define N_THREADS 4
 #define FREELIST_SIZE 1024
 
 using namespace boost;
@@ -41,6 +42,8 @@ std::vector<std::thread> threads(N_THREADS);
 std::vector<std::unique_ptr<lockfree::queue<Message>>> messageQueues(N_THREADS);
 std::vector<NodeId> path;
 double pathLength;
+
+stats s;
 
 int sumFlag = 0;
 std::mutex mutex;
@@ -78,7 +81,6 @@ void process_queue(unsigned int threadId, Message &m,
 			case TARGET_REACHED:
 				if (m.fCost < bestPathWeight)
 					bestPathWeight = m.fCost;
-				std::cout << "Target Reached!" << std::endl;
 				break;
 			default:
 				std::cerr << "WORK thread " << threadId << " : Invalid message type: " << m.type << std::endl;
@@ -168,6 +170,8 @@ hdastar_distributed(unsigned int threadId, const Graph &g, NodeId pathStart, Nod
 	}
 
 	barrier.arrive_and_wait();
+	if (threadId == 0)
+		s.timeStep("A*");
 
 	// Path Reconstruction
 	// FIXME invalid messages during reconstruction
@@ -215,9 +219,10 @@ int main(int argc, char *argv[]) {
 		return 1;
 	}
 	char* filename = argv[1];
+	s.timeStep("Start");
 	Graph g = read_graph(filename);
-	std::cout << "Graph read" << std::endl;
 	unsigned int N = num_vertices(g);
+	s.timeStep("Read graph");
 
 	for (int i = 0; i < N_THREADS; i++) {
 		messageQueues[i] = std::make_unique<lockfree::queue<Message>>(FREELIST_SIZE);
@@ -232,10 +237,13 @@ int main(int argc, char *argv[]) {
 	for (int i = 0; i < N_THREADS; i++) {
 		threads[i].join();
 	}
+	s.timeStep("Path reconstruction");
 
 	for (unsigned int node : path) {
 		std::cout << node << " -> ";
 	}
 	std::cout << std::endl;
 	std::cout << pathLength << std::endl;
+
+	s.printTimeStats();
 }
