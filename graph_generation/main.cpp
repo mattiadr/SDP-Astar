@@ -13,14 +13,18 @@ int main(int argc, char *argv[]) {
 	int i, j;
 
 	if (argc < 3) {
-		std::cerr << "usage:" << std::endl << argv[0] << " s n k" << std::endl
+		std::cerr << "usage:" << std::endl << argv[0] << " s n [k]" << std::endl
 		          << "Generates a k-nearest connected graph with n vertices in a grid of size s*s." << std::endl;
 		return 1;
 	}
 
 	const int s = strtol(argv[1], nullptr, 10);
 	const int n = strtol(argv[2], nullptr, 10);
-	const int k = strtol(argv[3], nullptr, 10);
+	int k;
+	if (argc < 4)
+		k = ceil(2 * exp(1) * log(n));
+	else
+		k = strtol(argv[3], nullptr, 10);
 
 	if (n > s * s) {
 		std::cerr << "n must be less than or equal to s*s." << std::endl;
