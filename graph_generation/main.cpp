@@ -76,9 +76,10 @@ int main(int argc, char *argv[]) {
 	int filename_num = 1;
 	FILE *graph_file;
 
-	while ((graph_file = fopen((graph_filename.str() + std::to_string(filename_num) + ".txt").c_str(), "r")) != nullptr)
+	while ((graph_file = fopen((graph_filename.str() + std::to_string(filename_num) + ".txt").c_str(), "r")) != nullptr) {
 		filename_num++;
-	fclose(graph_file);
+		fclose(graph_file);
+	}
 
 	graph_file = fopen((graph_filename.str() + std::to_string(filename_num) + ".txt").c_str(), "w");
 
