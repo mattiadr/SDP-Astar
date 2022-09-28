@@ -4,10 +4,13 @@
 #include <cfloat> // Needed to use DBL_MAX
 
 #include "../include/graph_utils/graph_utils.h"
+#include "../include/stats/stats.h"
 
 using namespace boost;
 
 typedef std::pair<unsigned int, double> NodeFCost;
+
+stats s;
 
 // Reconstruct path from graph and list of costs to nodes
 std::pair<double, std::vector<unsigned int>>
@@ -43,8 +46,10 @@ astar_sequential(const Graph &g, unsigned int source, unsigned int target) {
 		unsigned int curr = curr_pair.first;
 		openSet.pop();
 		if (curr == target) {
+			s.timeStep("A*");
 			// Reconstructing path
 			auto path = reconstruct_path(g, source, target, cameFrom);
+			s.timeStep("Path reconstruction");
 			return path;
 		}
 		if (closedSet.find(curr) != closedSet.end())
@@ -73,9 +78,11 @@ int main(int argc, char *argv[]) {
 		return 1;
 	}
 	char* filename = argv[1];
+	s.timeStep("Start");
 	Graph g = read_graph(filename);
 
 	unsigned int N = num_vertices(g);
+	s.timeStep("Read graph");
 	auto path_pair = astar_sequential(g, 0, N - 1);
 	auto path_weight = path_pair.first;
 	auto path = path_pair.second;
@@ -96,7 +103,9 @@ int main(int argc, char *argv[]) {
 	}
 	fclose(fout);
 	std::cout << std::endl;
-	printf("FINISHED ASTAR");
+	std::cout << "FINISHED ASTAR" << std::endl;
+
+	s.printTimeStats();
 
 	return 0;
 }

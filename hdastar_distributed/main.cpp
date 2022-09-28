@@ -8,7 +8,7 @@
 #include "../include/graph_utils/graph_utils.h"
 #include "../include/stats/stats.h"
 
-#define N_THREADS 8
+#define N_THREADS 16
 #define FREELIST_SIZE 1024
 
 using namespace boost;
@@ -85,7 +85,6 @@ void process_queue(unsigned int threadId, Message &m,
 			case TARGET_REACHED:
 				if (m.fCost < bestPathWeight)
 					bestPathWeight = m.fCost;
-				std::cout << "Target Reached!" << std::endl;
 				break;
 			default:
 				std::cerr << "WORK thread " << threadId << " : Invalid message type: " << m.type << std::endl;
