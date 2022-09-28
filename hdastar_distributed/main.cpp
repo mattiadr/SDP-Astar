@@ -1,7 +1,8 @@
-#include <queue>
 #include <barrier>
-#include <boost/lockfree/queue.hpp>
+#include <cfloat>
+#include <queue>
 #include <thread>
+#include <boost/lockfree/queue.hpp>
 
 #include "../include/graph_utils/graph_utils.h"
 
