@@ -1,10 +1,11 @@
 #include <queue>
 #include <barrier>
 #include <boost/lockfree/queue.hpp>
+#include <thread>
 
 #include "../include/graph_utils/graph_utils.h"
 
-#define N_THREADS 16
+#define N_THREADS 8
 #define FREELIST_SIZE 1024
 
 using namespace boost;
@@ -58,50 +59,57 @@ bool has_finished() {
 	return true;
 }
 
+// empty message queue
+void process_queue(unsigned int threadId, Message &m,
+				   std::priority_queue<NodeFCost, std::vector<NodeFCost>, decltype(queue_comparator)> &openSet,
+				   std::unordered_map<NodeId, double> &costToCome,
+				   std::unordered_map<NodeId, NodeId> &cameFrom,
+				   double &bestPathWeight) {
+	std::unordered_map<NodeId, double>::iterator iter;
+	while (messageQueues[threadId]->pop(m)) {
+		switch (m.type) {
+			// move work messages to open set if no duplicates
+			case WORK:
+				iter = costToCome.find(m.target);
+				if ((iter == costToCome.end() || iter->second > m.gCost) && m.fCost < bestPathWeight) {
+					openSet.push(NodeFCost(m.target, m.fCost));
+					costToCome.insert_or_assign(m.target, m.gCost);
+					cameFrom.insert_or_assign(m.target, m.parent);
+				}
+				break;
+
+			case TARGET_REACHED:
+				if (m.fCost < bestPathWeight)
+					bestPathWeight = m.fCost;
+				std::cout << "Target Reached!" << std::endl;
+				break;
+			default:
+				std::cerr << "WORK thread " << threadId << " : Invalid message type: " << m.type << std::endl;
+		}
+	}
+}
+
 void
 hdastar_distributed(unsigned int threadId, const Graph &g, NodeId pathStart, NodeId pathEnd) {
 	std::priority_queue<NodeFCost, std::vector<NodeFCost>, decltype(queue_comparator)> openSet(queue_comparator);
 	std::unordered_map<NodeId, double> costToCome;
 	std::unordered_map<NodeId, double>::iterator iter;
 	std::unordered_map<NodeId, NodeId> cameFrom;
+	double bestPathWeight = DBL_MAX;
 	Message m;
 
 	while (true) {
 		// empty message queue
-		while (messageQueues[threadId]->pop(m)) {
-			switch (m.type) {
-				// move work messages to open set if no duplicates
-				case WORK:
-					iter = costToCome.find(m.target);
-					if (iter == costToCome.end() || iter->second > m.gCost) {
-						openSet.push(NodeFCost(m.target, m.fCost));
-						costToCome.insert_or_assign(m.target, m.gCost);
-						cameFrom.insert_or_assign(m.target, m.parent);
-					}
-					break;
-
-				case TARGET_REACHED:
-					// TODO
-					std::cout << "Target Reached!" << std::endl;
-					break;
-				default:
-					std::cerr << "WORK " << threadId << " : Invalid message type: " << m.type << std::endl;
-			}
-		}
+		process_queue(threadId, m, openSet, costToCome, cameFrom, bestPathWeight);
 
 		// termination condition
 		if (openSet.empty()) {
 			barrier.arrive_and_wait();
 			// set finished flag
-			finished[threadId] = messageQueues[threadId]->empty();
+			process_queue(threadId, m, openSet, costToCome, cameFrom, bestPathWeight);
+			finished[threadId] = openSet.empty();
 			barrier.arrive_and_wait();
 
-			if (threadId == 0) {
-				for (int i = 0; i < N_THREADS; i++) {
-					std::cout << finished[i] << ", ";
-				}
-				std::cout << std::endl;
-			}
 			// check if all threads finished working, otherwise continue
 			if (has_finished()) {
 				break;
@@ -116,7 +124,12 @@ hdastar_distributed(unsigned int threadId, const Graph &g, NodeId pathStart, Nod
 
 		// check if we reached end of path
 		if (n.first == pathEnd) {
-			// TODO broadcast TARGET_REACHED for pruning
+			// DONE broadcast TARGET_REACHED for pruning
+			if (n.second < bestPathWeight) {
+				bestPathWeight = n.second;
+				Message targetReached{.type = TARGET_REACHED, .target = n.first, .fCost = n.second};
+				broadcast_message(targetReached, threadId);
+			}
 			continue;
 		}
 
@@ -131,7 +144,7 @@ hdastar_distributed(unsigned int threadId, const Graph &g, NodeId pathStart, Nod
 			if (targetThread == threadId) {
 				// send to this open set
 				iter = costToCome.find((NodeId) neighbor.m_target);
-				if (iter == costToCome.end() || iter->second > gCost) {
+				if ((iter == costToCome.end() || iter->second > gCost) && fCost < bestPathWeight) {
 					openSet.push(NodeFCost((NodeId) neighbor.m_target, fCost));
 					costToCome.insert_or_assign((NodeId) neighbor.m_target, gCost);
 					cameFrom.insert_or_assign((NodeId) neighbor.m_target, n.first);
@@ -145,6 +158,8 @@ hdastar_distributed(unsigned int threadId, const Graph &g, NodeId pathStart, Nod
 		}
 	}
 
+	std::cout << "Starting path reconstruction..." << std::endl;
+
 	// Path Reconstruction
 	if (hash_node_id(pathEnd, N_THREADS) == threadId) {
 		messageQueues[threadId]->push(Message{PATH_RECONSTRUCTION, pathEnd});
@@ -157,7 +172,6 @@ hdastar_distributed(unsigned int threadId, const Graph &g, NodeId pathStart, Nod
 		if (!messageQueues[threadId]->pop(m)) {
 			continue;
 		}
-
 		switch (m.type) {
 			case PATH_RECONSTRUCTION:
 				path.insert(path.begin(), m.target);
@@ -166,7 +180,12 @@ hdastar_distributed(unsigned int threadId, const Graph &g, NodeId pathStart, Nod
 					broadcast_message(Message{PATH_END}, threadId);
 					return;
 				} else {
-					prev = cameFrom.at(m.target);
+					try {
+						prev = cameFrom.at(m.target);
+					} catch (const std::out_of_range &e) {
+						std::cerr << "Error reconstructing path: "<< m.target << " Nodes parent not found" << std::endl;
+						throw e;
+					}
 					prevThread = hash_node_id(prev, N_THREADS);
 					messageQueues[prevThread]->push(Message{PATH_RECONSTRUCTION, prev});
 				}
@@ -186,6 +205,7 @@ int main(int argc, char *argv[]) {
 	}
 	char* filename = argv[1];
 	Graph g = read_graph(filename);
+	std::cout << "Graph read" << std::endl;
 	unsigned int N = num_vertices(g);
 
 	for (int i = 0; i < N_THREADS; i++) {
@@ -194,7 +214,6 @@ int main(int argc, char *argv[]) {
 
 	Message m{WORK, (NodeId) 0, (NodeId) 0, 0, 0};
 	messageQueues[hash_node_id(0, N_THREADS)]->push(m);
-
 	for (int i = 0; i < N_THREADS; i++) {
 		threads[i] = std::thread(hdastar_distributed, i, g, 0, N - 1);
 	}
