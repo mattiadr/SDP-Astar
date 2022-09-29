@@ -7,9 +7,10 @@
 
 #include "../include/graph_utils/graph_utils.h"
 #include "../include/stats/stats.h"
+#include "../include/queue/queue.h"
 
-#define N_THREADS 16
-#define FREELIST_SIZE 1024
+#define N_THREADS 8
+#define FREELIST_SIZE 32
 
 using namespace boost;
 
@@ -47,7 +48,7 @@ stats s;
 
 /** functions **/
 
-void broadcast_message(Message m, unsigned int senderId) {
+void broadcast_message(const Message &m, const unsigned int senderId) {
 	for (int i = 0; i < N_THREADS; i++) {
 		if (i == senderId) continue;
 		messageQueues[i]->push(m);
@@ -64,7 +65,7 @@ bool has_finished() {
 }
 
 // empty message queue
-void process_queue(unsigned int threadId, Message &m,
+void process_queue(const unsigned int threadId, Message &m,
 				   std::priority_queue<NodeFCost, std::vector<NodeFCost>, decltype(queue_comparator)> &openSet,
 				   std::unordered_map<NodeId, double> &costToCome,
 				   std::unordered_map<NodeId, NodeId> &cameFrom,
@@ -93,7 +94,7 @@ void process_queue(unsigned int threadId, Message &m,
 }
 
 void
-hdastar_distributed(unsigned int threadId, const Graph &g, NodeId pathStart, NodeId pathEnd) {
+hdastar_distributed(const unsigned int threadId, const Graph &g, const NodeId &pathStart, const NodeId &pathEnd) {
 	std::priority_queue<NodeFCost, std::vector<NodeFCost>, decltype(queue_comparator)> openSet(queue_comparator);
 	std::unordered_map<NodeId, double> costToCome;
 	std::unordered_map<NodeId, double>::iterator iter;
@@ -215,12 +216,13 @@ int main(int argc, char *argv[]) {
 
 	for (int i = 0; i < N_THREADS; i++) {
 		messageQueues[i] = std::make_unique<lockfree::queue<Message>>(FREELIST_SIZE);
+//		messageQueues[i] = std::make_unique<queue<Message>>();
 	}
 
 	Message m{WORK, (NodeId) 0, (NodeId) 0, 0, 0};
 	messageQueues[hash_node_id(0, N_THREADS)]->push(m);
 	for (int i = 0; i < N_THREADS; i++) {
-		threads[i] = std::thread(hdastar_distributed, i, g, 0, N - 1);
+		threads[i] = std::thread(hdastar_distributed, i, ref(g), 0, N - 1);
 	}
 
 	for (int i = 0; i < N_THREADS; i++) {
