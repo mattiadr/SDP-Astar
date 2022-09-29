@@ -4,6 +4,7 @@ project(sequential_astar)
 project(hdastar_distributed)
 
 set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -pthread")
 
 add_executable(graph_generation graph_generation/main.cpp)
 add_executable(sequential_astar sequential_astar/main.cpp)
