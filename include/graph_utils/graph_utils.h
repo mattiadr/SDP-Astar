@@ -20,6 +20,10 @@ typedef std::pair<unsigned int, unsigned int> Edge;
 // Read graph from file. Graph should be generated from graph_generation script
 Graph read_graph(char *fin_filename) {
 	FILE *fin = fopen(fin_filename, "r");
+	if (fin == nullptr) {
+		std::cerr << "Cannot find " << fin_filename << std::endl;
+		exit(1);
+	}
 	unsigned int n_nodes;
 	fscanf(fin, "%d", &n_nodes);
 	Graph g(n_nodes);
