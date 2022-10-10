@@ -11,6 +11,7 @@
 
 #define N_THREADS 16
 #define FREELIST_SIZE 32
+#define SCMP_QUEUE 1
 
 using namespace boost;
 
@@ -40,7 +41,11 @@ typedef struct {
 const auto queue_comparator = [](const NodeFCost &a, const NodeFCost &b) { return a.second > b.second; };
 
 std::vector<std::thread> threads(N_THREADS);
+#if SCMP_QUEUE
+std::vector<std::unique_ptr<scmp_queue<Message>>> messageQueues(N_THREADS);
+#else
 std::vector<std::unique_ptr<lockfree::queue<Message>>> messageQueues(N_THREADS);
+#endif
 std::barrier barrier(N_THREADS);
 std::vector<bool> finished(N_THREADS);
 std::vector<NodeId> path;
@@ -233,8 +238,11 @@ int main(int argc, char *argv[]) {
 	s.timeStep("Read graph");
 
 	for (int i = 0; i < N_THREADS; i++) {
+#if SCMP_QUEUE
+		messageQueues[i] = std::make_unique<scmp_queue<Message>>();
+#else
 		messageQueues[i] = std::make_unique<lockfree::queue<Message>>(FREELIST_SIZE);
-//		messageQueues[i] = std::make_unique<queue<Message>>();
+#endif
 	}
 
 	Message m{.type = WORK, .target = (NodeId) source, .parent = (NodeId) source, .fCost = 0, .gCost = 0};

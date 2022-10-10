@@ -4,8 +4,9 @@
 #include <queue>
 #include <mutex>
 
+// Single-consumer multi-producer queue
 template <class T>
-class queue {
+class scmp_queue {
 private:
 	std::queue<T> *readQueue = new std::queue<T>();
 	std::queue<T> *writeQueue = new std::queue<T>();
