@@ -49,7 +49,6 @@ std::vector<std::unique_ptr<lockfree::queue<Message>>> messageQueues(N_THREADS);
 std::barrier barrier(N_THREADS);
 std::vector<bool> finished(N_THREADS);
 std::vector<NodeId> path;
-stats s;
 
 /** functions **/
 
@@ -101,7 +100,7 @@ void process_queue(const unsigned int threadId, Message &m,
 }
 
 void
-hdastar_distributed(const unsigned int threadId, const Graph &g, const NodeId &pathStart, const NodeId &pathEnd) {
+hdastar_distributed(const unsigned int threadId, const Graph &g, const NodeId &pathStart, const NodeId &pathEnd, stats &stat) {
 	std::priority_queue<NodeFCost, std::vector<NodeFCost>, decltype(queue_comparator)> openSet(queue_comparator);
 	std::unordered_map<NodeId, double> costToCome;
 	std::unordered_map<NodeId, double>::iterator iter;
@@ -148,6 +147,7 @@ hdastar_distributed(const unsigned int threadId, const Graph &g, const NodeId &p
 
 		// iterate over neighbors
 		double ctc = costToCome.at(n.first);
+		stat.addNodeVisited();
 		for (auto neighbor: make_iterator_range(out_edges(n.first, g))) {
 			double weight = get(edge_weight, g, neighbor);
 			double gCost = ctc + weight;
@@ -174,7 +174,7 @@ hdastar_distributed(const unsigned int threadId, const Graph &g, const NodeId &p
 	}
 
 	if (threadId == 0)
-		s.timeStep("Astar");
+		stat.timeStep("Astar");
 
 	// Path Reconstruction
 	if (hash_node_id(pathEnd, N_THREADS) == threadId) {
@@ -222,12 +222,12 @@ int main(int argc, char *argv[]) {
 	char* filename = argv[1];
 
 	char *parseEnd;
-	unsigned int seed = strtol(argv[2], &parseEnd, 10);
+	unsigned long seed = strtol(argv[2], &parseEnd, 10);
 	if (*parseEnd != '\0') {
 		std::cerr << "SEED must be a number, got " << argv[2] << " instead" << std::endl;
 		return 2;
 	}
-
+	stats s("HDA*", filename, seed);
 	s.timeStep("Start");
 	Graph g = read_graph(filename);
 
@@ -250,7 +250,7 @@ int main(int argc, char *argv[]) {
 	s.timeStep("Queues init");
 
 	for (int i = 0; i < N_THREADS; i++) {
-		threads[i] = std::thread(hdastar_distributed, i, ref(g), source, dest);
+		threads[i] = std::thread(hdastar_distributed, i, ref(g), source, dest, ref(s));
 	}
 
 	for (int i = 0; i < N_THREADS; i++) {
@@ -272,4 +272,8 @@ int main(int argc, char *argv[]) {
 	}
 	std::cout << "Total cost: " << cost << std::endl;
 	std::cout << "Total steps: " << path.size() << std::endl;
+
+	s.setTotalCost(cost);
+	s.setTotalSteps(path.size());
+	s.dump_csv(path);
 }
