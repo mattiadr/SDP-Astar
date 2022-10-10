@@ -73,17 +73,29 @@ astar_sequential(const Graph &g, unsigned int source, unsigned int target) {
 }
 
 int main(int argc, char *argv[]) {
-	if (argc < 2) {
-		std::cerr << "Usage: " << argv[0] << " FILENAME" << std::endl;
+	if (argc < 3) {
+		std::cerr << "Usage: " << argv[0] << " FILENAME SEED" << std::endl;
 		return 1;
 	}
 	char* filename = argv[1];
+	char *parseEnd;
+
+	unsigned int seed = strtol(argv[2], &parseEnd, 10);
+	if (*parseEnd != '\0') {
+		std::cerr << "SEED must be a number, got " << argv[2] << " instead" << std::endl;
+		return 2;
+	}
+
 	s.timeStep("Start");
 	Graph g = read_graph(filename);
 
 	unsigned int N = num_vertices(g);
+	NodeId source, dest;
+
+	randomize_source_dest(seed, N, source, dest);
 	s.timeStep("Read graph");
-	auto path_pair = astar_sequential(g, 0, N - 1);
+
+	auto path_pair = astar_sequential(g, source, dest);
 	auto path_weight = path_pair.first;
 	auto path = path_pair.second;
 

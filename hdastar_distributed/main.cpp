@@ -7,9 +7,9 @@
 
 #include "../include/graph_utils/graph_utils.h"
 #include "../include/stats/stats.h"
-#include "../include/queue/queue.h"
+#include "../include/queue/scmp_queue.h"
 
-#define N_THREADS 8
+#define N_THREADS 16
 #define FREELIST_SIZE 32
 
 using namespace boost;
@@ -37,7 +37,7 @@ typedef struct {
 
 /** globals **/
 
-const auto queue_comparator = [](NodeFCost a, NodeFCost b) { return a.second > b.second; };
+const auto queue_comparator = [](const NodeFCost &a, const NodeFCost &b) { return a.second > b.second; };
 
 std::vector<std::thread> threads(N_THREADS);
 std::vector<std::unique_ptr<lockfree::queue<Message>>> messageQueues(N_THREADS);
@@ -75,11 +75,13 @@ void process_queue(const unsigned int threadId, Message &m,
 		switch (m.type) {
 			// move work messages to open set if no duplicates
 			case WORK:
-				iter = costToCome.find(m.target);
-				if ((iter == costToCome.end() || iter->second > m.gCost) && m.fCost < bestPathWeight) {
-					openSet.push(NodeFCost(m.target, m.fCost));
-					costToCome.insert_or_assign(m.target, m.gCost);
-					cameFrom.insert_or_assign(m.target, m.parent);
+				if (m.fCost < bestPathWeight) {
+					iter = costToCome.find(m.target);
+					if ((iter == costToCome.end() || iter->second > m.gCost)) {
+						openSet.push(NodeFCost(m.target, m.fCost));
+						costToCome.insert_or_assign(m.target, m.gCost);
+						cameFrom.insert_or_assign(m.target, m.parent);
+					}
 				}
 				break;
 
@@ -125,6 +127,8 @@ hdastar_distributed(const unsigned int threadId, const Graph &g, const NodeId &p
 		// pop first from open set
 		NodeFCost n = openSet.top();
 		openSet.pop();
+		if (n.second >= bestPathWeight)
+			continue;
 
 		// check if we reached end of path
 		if (n.first == pathEnd) {
@@ -144,20 +148,22 @@ hdastar_distributed(const unsigned int threadId, const Graph &g, const NodeId &p
 			double gCost = ctc + weight;
 			double fCost = gCost + calc_h_cost(g, neighbor.m_target, pathEnd);
 
-			unsigned int targetThread = hash_node_id(neighbor.m_target, N_THREADS);
-			if (targetThread == threadId) {
-				// send to this open set
-				iter = costToCome.find((NodeId) neighbor.m_target);
-				if ((iter == costToCome.end() || iter->second > gCost) && fCost < bestPathWeight) {
-					openSet.push(NodeFCost((NodeId) neighbor.m_target, fCost));
-					costToCome.insert_or_assign((NodeId) neighbor.m_target, gCost);
-					cameFrom.insert_or_assign((NodeId) neighbor.m_target, n.first);
+			if (fCost < bestPathWeight) {
+				unsigned int targetThread = hash_node_id(neighbor.m_target, N_THREADS);
+				if (targetThread == threadId) {
+					// send to this open set
+					iter = costToCome.find((NodeId) neighbor.m_target);
+					if ((iter == costToCome.end() || iter->second > gCost)) {
+						openSet.push(NodeFCost((NodeId) neighbor.m_target, fCost));
+						costToCome.insert_or_assign((NodeId) neighbor.m_target, gCost);
+						cameFrom.insert_or_assign((NodeId) neighbor.m_target, n.first);
+					}
+				} else {
+					// create message
+					Message outgoing{.type = WORK, .target = (NodeId) neighbor.m_target, .parent = n.first, .fCost = fCost, .gCost = gCost};
+					// send message
+					messageQueues[targetThread]->push(outgoing);
 				}
-			} else {
-				// create message
-				Message outgoing{WORK, (NodeId) neighbor.m_target, n.first, fCost, gCost};
-				// send message
-				messageQueues[targetThread]->push(outgoing);
 			}
 		}
 	}
@@ -167,7 +173,7 @@ hdastar_distributed(const unsigned int threadId, const Graph &g, const NodeId &p
 
 	// Path Reconstruction
 	if (hash_node_id(pathEnd, N_THREADS) == threadId) {
-		messageQueues[threadId]->push(Message{PATH_RECONSTRUCTION, pathEnd});
+		messageQueues[threadId]->push(Message{.type = PATH_RECONSTRUCTION, .target = pathEnd});
 	}
 
 	NodeId prev;
@@ -182,7 +188,7 @@ hdastar_distributed(const unsigned int threadId, const Graph &g, const NodeId &p
 				path.insert(path.begin(), m.target);
 
 				if (m.target == pathStart) {
-					broadcast_message(Message{PATH_END}, threadId);
+					broadcast_message(Message{.type = PATH_END}, threadId);
 					return;
 				} else {
 					try {
@@ -192,7 +198,7 @@ hdastar_distributed(const unsigned int threadId, const Graph &g, const NodeId &p
 						throw e;
 					}
 					prevThread = hash_node_id(prev, N_THREADS);
-					messageQueues[prevThread]->push(Message{PATH_RECONSTRUCTION, prev});
+					messageQueues[prevThread]->push(Message{.type = PATH_RECONSTRUCTION, .target = prev});
 				}
 				break;
 			case PATH_END:
@@ -204,14 +210,26 @@ hdastar_distributed(const unsigned int threadId, const Graph &g, const NodeId &p
 }
 
 int main(int argc, char *argv[]) {
-	if (argc < 2) {
-		std::cerr << "Usage: " << argv[0] << " FILENAME" << std::endl;
+	if (argc < 3) {
+		std::cerr << "Usage: " << argv[0] << " FILENAME SEED" << std::endl;
 		return 1;
 	}
 	char* filename = argv[1];
+
+	char *parseEnd;
+	unsigned int seed = strtol(argv[2], &parseEnd, 10);
+	if (*parseEnd != '\0') {
+		std::cerr << "SEED must be a number, got " << argv[2] << " instead" << std::endl;
+		return 2;
+	}
+
 	s.timeStep("Start");
 	Graph g = read_graph(filename);
+
 	unsigned int N = num_vertices(g);
+	NodeId source, dest;
+
+	randomize_source_dest(seed, N, source, dest);
 	s.timeStep("Read graph");
 
 	for (int i = 0; i < N_THREADS; i++) {
@@ -219,10 +237,12 @@ int main(int argc, char *argv[]) {
 //		messageQueues[i] = std::make_unique<queue<Message>>();
 	}
 
-	Message m{WORK, (NodeId) 0, (NodeId) 0, 0, 0};
-	messageQueues[hash_node_id(0, N_THREADS)]->push(m);
+	Message m{.type = WORK, .target = (NodeId) source, .parent = (NodeId) source, .fCost = 0, .gCost = 0};
+	messageQueues[hash_node_id(source, N_THREADS)]->push(m);
+	s.timeStep("Queues init");
+
 	for (int i = 0; i < N_THREADS; i++) {
-		threads[i] = std::thread(hdastar_distributed, i, ref(g), 0, N - 1);
+		threads[i] = std::thread(hdastar_distributed, i, ref(g), source, dest);
 	}
 
 	for (int i = 0; i < N_THREADS; i++) {
@@ -231,8 +251,17 @@ int main(int argc, char *argv[]) {
 	s.timeStep("Path reconstruction");
 	s.printTimeStats();
 
-	for (unsigned int node : path) {
-		std::cout << node << " -> ";
+	// Print path to stdout
+//	for (unsigned int node : path) {
+//		std::cout << node << " -> ";
+//	}
+//	std::cout << std::endl;
+
+	// Print paths total cost
+	double cost = 0;
+	for (int i = 1; i < path.size(); i++) {
+		cost += get(edge_weight, g, edge(path[i-1], path[i], g).first);
 	}
-	std::cout << std::endl;
+	std::cout << "Total cost: " << cost << std::endl;
+	std::cout << "Total steps: " << path.size() << std::endl;
 }

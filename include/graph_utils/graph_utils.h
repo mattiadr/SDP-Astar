@@ -4,18 +4,20 @@
 #include <boost/graph/adjacency_list.hpp>
 #include <boost/graph/graphviz.hpp>
 
+#define LCG_MULTIPLIER 22695477
+#define LCG_INCREMENT 1
+
 using namespace boost;
 
 typedef struct {
-	unsigned int x;
-	unsigned int y;
+	double x;
+	double y;
 } VertexPosition;
 
 typedef unsigned int NodeId;
 
 typedef property<edge_weight_t, double> EdgeWeightProperty;
 typedef adjacency_list<vecS, vecS, undirectedS, VertexPosition, EdgeWeightProperty> Graph;
-typedef std::pair<unsigned int, unsigned int> Edge;
 
 // Read graph from file. Graph should be generated from graph_generation script
 Graph read_graph(char *fin_filename) {
@@ -27,13 +29,13 @@ Graph read_graph(char *fin_filename) {
 	unsigned int n_nodes;
 	fscanf(fin, "%d", &n_nodes);
 	Graph g(n_nodes);
-	unsigned int x, y;
+	double x, y;
 	for (int i = 0; i < n_nodes; i++) {
-		fscanf(fin, "%d %d", &x, &y);
+		fscanf(fin, "%lf %lf", &x, &y);
 		g[i].x = x;
 		g[i].y = y;
 	}
-	unsigned int node1, node2;
+	NodeId node1, node2;
 	double weight;
 	while (fscanf(fin, "%d %d %lf", &node1, &node2, &weight) == 3) {
 		add_edge(node1, node2, EdgeWeightProperty(weight), g);
@@ -48,6 +50,15 @@ void print_graph(Graph g, std::ostream &os) {
 	dp.property("node_id", get(vertex_index, g));
 	dp.property("weight", get(edge_weight, g));
 	write_graphviz_dp(os, g, dp);
+}
+
+void randomize_source_dest(uint64_t seed, uint64_t nodes, NodeId &source, NodeId &dest) {
+	// Linear congruential generator
+	uint64_t r1 = (seed * LCG_MULTIPLIER + LCG_INCREMENT) % nodes;
+	uint64_t r2 = (r1 * LCG_MULTIPLIER + LCG_INCREMENT) % nodes;
+	source = r1;
+	dest = r2;
+	std::cerr << "Chosen random source (" << source << ") and dest (" << dest << ")" << std::endl;
 }
 
 double calc_h_cost(const Graph &g, NodeId source, NodeId dest) {

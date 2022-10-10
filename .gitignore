@@ -1,3 +1,5 @@
 .idea
 cmake-build-debug
+cmake-build-ubuntu-server-vm
+cmake-build-visual-studio
 include/boost_1_80_0
