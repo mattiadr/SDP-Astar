@@ -3,6 +3,7 @@
 #include <cfloat>
 #include <thread>
 #include <chrono>
+#include <semaphore>
 #include <boost/lockfree/queue.hpp>
 
 #include "../include/graph_utils/graph_utils.h"
@@ -49,6 +50,7 @@ std::vector<std::unique_ptr<lockfree::queue<Message>>> messageQueues(N_THREADS);
 std::barrier barrier(N_THREADS);
 std::vector<bool> finished(N_THREADS);
 std::vector<NodeId> path;
+std::vector<std::unique_ptr<std::counting_semaphore<N_THREADS>>> semaphores(N_THREADS);
 
 /** functions **/
 
@@ -99,8 +101,7 @@ void process_queue(const unsigned int threadId, Message &m,
 	}
 }
 
-void
-hdastar_distributed(const unsigned int threadId, const Graph &g, const NodeId &pathStart, const NodeId &pathEnd, stats &stat) {
+void hdastar_distributed(const unsigned int threadId, const Graph &g, const NodeId &pathStart, const NodeId &pathEnd, stats &stat) {
 	std::priority_queue<NodeFCost, std::vector<NodeFCost>, decltype(queue_comparator)> openSet(queue_comparator);
 	std::unordered_map<NodeId, double> costToCome;
 	std::unordered_map<NodeId, double>::iterator iter;
@@ -179,12 +180,14 @@ hdastar_distributed(const unsigned int threadId, const Graph &g, const NodeId &p
 	// Path Reconstruction
 	if (hash_node_id(pathEnd, N_THREADS) == threadId) {
 		messageQueues[threadId]->push(Message{.type = PATH_RECONSTRUCTION, .target = pathEnd});
+		semaphores[threadId]->release();
 	}
 
 	NodeId prev;
 	unsigned int prevThread;
 
 	while (true) {
+		semaphores[threadId]->acquire();
 		if (!messageQueues[threadId]->pop(m)) {
 			continue;
 		}
@@ -194,6 +197,9 @@ hdastar_distributed(const unsigned int threadId, const Graph &g, const NodeId &p
 
 				if (m.target == pathStart) {
 					broadcast_message(Message{.type = PATH_END}, threadId);
+					for (int i = 0; i < N_THREADS; i++)
+						if (i != threadId)
+							semaphores[i]->release();
 					return;
 				} else {
 					try {
@@ -204,6 +210,7 @@ hdastar_distributed(const unsigned int threadId, const Graph &g, const NodeId &p
 					}
 					prevThread = hash_node_id(prev, N_THREADS);
 					messageQueues[prevThread]->push(Message{.type = PATH_RECONSTRUCTION, .target = prev});
+					semaphores[prevThread]->release();
 				}
 				break;
 			case PATH_END:
@@ -243,6 +250,7 @@ int main(int argc, char *argv[]) {
 #else
 		messageQueues[i] = std::make_unique<lockfree::queue<Message>>(FREELIST_SIZE);
 #endif
+		semaphores[i] = std::make_unique<std::counting_semaphore<N_THREADS>>(0);
 	}
 
 	Message m{.type = WORK, .target = (NodeId) source, .parent = (NodeId) source, .fCost = 0, .gCost = 0};
