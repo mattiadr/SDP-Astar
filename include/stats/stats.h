@@ -13,6 +13,7 @@ typedef std::pair<high_resolution_clock::time_point, std::string> TimePointPair;
 
 class stats {
 	std::string algorithm;
+	unsigned int nThreads;
 	std::string inputFile;
 	unsigned long seed;
 	double totalCost;
@@ -21,9 +22,8 @@ class stats {
 	std::atomic<unsigned int> nodeVisited = 0;
 
 public:
-	stats(const std::string &algorithm, const std::string &inputFile, unsigned long seed) : algorithm(algorithm),
-																							inputFile(inputFile),
-																							seed(seed) {}
+	stats(const std::string &algorithm, unsigned int nThreads, const std::string &inputFile, unsigned long seed)
+			: algorithm(algorithm), nThreads(nThreads), inputFile(inputFile), seed(seed) {}
 
 	void setTotalCost(double totalCost) {
 		stats::totalCost = totalCost;
@@ -58,8 +58,8 @@ public:
 			else if (timePoints[i].second == "Path reconstruction")
 				pathRecTime = duration_cast<duration<double>>(timePoints[i].first - timePoints[i - 1].first).count();
 		}
-		outFile << algorithm << "," << inputFile << "," << seed << "," << totalCost << "," << totalSteps << ","
-				<< graphReadTime << "," << astarTime << "," << pathRecTime << "," << nodeVisited << ",";
+		outFile << algorithm << "," << nThreads << "," << inputFile << "," << seed << "," << totalCost << ","
+				<< totalSteps << "," << graphReadTime << "," << astarTime << "," << pathRecTime << "," << nodeVisited << ",";
 		int i;
 		for (i = 0; i < path.size() - 1; i++)
 			outFile << path[i] << "-";

@@ -227,7 +227,7 @@ int main(int argc, char *argv[]) {
 		std::cerr << "SEED must be a number, got " << argv[2] << " instead" << std::endl;
 		return 2;
 	}
-	stats s("HDA*", filename, seed);
+	stats s("HDA*", N_THREADS, filename, seed);
 	s.timeStep("Start");
 	Graph g = read_graph(filename);
 

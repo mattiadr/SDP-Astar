@@ -85,7 +85,7 @@ int main(int argc, char *argv[]) {
 		return 2;
 	}
 
-	stats s("A*", filename, seed);
+	stats s("A*", 1, filename, seed);
 	s.timeStep("Start");
 	Graph g = read_graph(filename);
 
