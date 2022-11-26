@@ -10,6 +10,7 @@
 
 
 #define N_THREADS 16
+#define INVALID_NODE_ID ((NodeId) -1)
 
 #define myOpenSet openSets[threadId]
 #define myOpenSetMutex openSetMutexes[threadId]
@@ -38,12 +39,12 @@ std::vector<std::unique_ptr<OpenSet>> openSets(N_THREADS);
 std::vector<std::mutex> openSetMutexes(N_THREADS);
 
 // came from
-std::unordered_map<NodeId, NodeId> cameFrom;
+NodeId *cameFrom;
 std::mutex cameFromMutex;
 
 // cost to come
-std::unordered_map<NodeId, double> costToCome;
-std::mutex costToComeMutex;
+double *costToCome;
+std::vector<std::mutex> costToComeMutexes(N_THREADS);
 
 // best path
 double bestPathWeight = DBL_MAX;
@@ -68,10 +69,7 @@ bool has_finished() {
 	return true;
 }
 
-void hdastar_shared(const unsigned int threadId, const Graph &g, const NodeId &pathStart, const NodeId &pathEnd,
-                    stats &stat) {
-	std::unordered_map<NodeId, double>::iterator iter;
-
+void hdastar_shared(const unsigned int threadId, const Graph &g, const NodeId &pathStart, const NodeId &pathEnd, stats &stat) {
 	while (true) {
 		// termination condition
 		if (myOpenSet->empty()) {
@@ -110,8 +108,8 @@ void hdastar_shared(const unsigned int threadId, const Graph &g, const NodeId &p
 		// iterate over neighbors
 		double ctc;
 		{
-			std::unique_lock lock(costToComeMutex);
-			ctc = costToCome.at(nfc.node);
+			std::unique_lock lock(costToComeMutexes[hash_node_id(nfc.node, N_THREADS)]);
+			ctc = costToCome[nfc.node];
 		}
 		stat.addNodeVisited();
 		for (auto neighbor: make_iterator_range(out_edges(nfc.node, g))) {
@@ -122,14 +120,13 @@ void hdastar_shared(const unsigned int threadId, const Graph &g, const NodeId &p
 
 			if (fCost < bestPathWeight) {
 				unsigned int targetThread = hash_node_id(target, N_THREADS);
-				std::unique_lock lock(costToComeMutex);
-				iter = costToCome.find(target);
-				if (iter == costToCome.end() || iter->second > gCost) {
-					costToCome.insert_or_assign(target, gCost);
+				std::unique_lock lock(costToComeMutexes[targetThread]);
+				if (costToCome[target] > gCost) {
+					costToCome[target] = gCost;
 					lock.unlock();
 					{
 						std::unique_lock lock2(cameFromMutex);
-						cameFrom.insert_or_assign(target, nfc.node);
+						cameFrom[target] = nfc.node;
 					}
 					{
 						std::unique_lock lock2(openSetMutexes[targetThread]);
@@ -149,11 +146,10 @@ void path_reconstruction(const Graph &g, const NodeId &pathStart, const NodeId &
 		if (curr == pathStart)
 			return;
 
-		try {
-			curr = cameFrom.at(curr);
-		} catch (const std::out_of_range &e) {
+		curr = cameFrom[curr];
+		if (curr == INVALID_NODE_ID) {
 			std::cerr << "Error during path reconstruction: Node " << curr << " parent not found" << std::endl;
-			throw e;
+			return;
 		}
 	}
 }
@@ -190,10 +186,17 @@ int main(int argc, char *argv[]) {
 		openSets[i] = std::make_unique<OpenSet>(queue_comparator);
 	}
 
+	// init arrays
+	cameFrom = new NodeId[N];
+	std::fill_n(cameFrom, N, INVALID_NODE_ID);
+
+	costToCome = new double[N];
+	std::fill_n(costToCome, N, DBL_MAX);
+	costToCome[source] = 0;
+
 	// push first node and set cost to come
 	NodeFCost nfc{.node = (NodeId) source, .fCost = 0};
 	openSets[hash_node_id(source, N_THREADS)]->push(nfc);
-	costToCome.insert_or_assign(source, 0);
 	s.timeStep("Init done");
 
 	// run threads
@@ -211,6 +214,10 @@ int main(int argc, char *argv[]) {
 	path_reconstruction(ref(g), source, dest, ref(s));
 	s.timeStep("Path reconstruction");
 	s.printTimeStats();
+
+	// free resources
+	delete[] cameFrom;
+	delete[] costToCome;
 
 	// print paths total cost
 	double cost = 0;
