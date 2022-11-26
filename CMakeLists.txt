@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.21)
 project(graph_generation)
 project(sequential_astar)
-project(hdastar_distributed)
+project(hdastar_message_passing)
 project(hdastar_shared)
 
 set(CMAKE_CXX_STANDARD 20)
@@ -9,7 +9,7 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -pthread")
 
 add_executable(graph_generation graph_generation/main.cpp)
 add_executable(sequential_astar sequential_astar/main.cpp)
-add_executable(hdastar_distributed hdastar_distributed/main.cpp)
+add_executable(hdastar_message_passing hdastar_message_passing/main.cpp)
 add_executable(hdastar_shared hdastar_shared/main.cpp)
 set(Boost_INCLUDE_DIR include/boost_1_80_0/)
 set(Boost_LIBRARY_DIR include/boost_1_80_0/libs)
