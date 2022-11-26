@@ -13,7 +13,6 @@
 #define N_THREADS 16
 #define FREELIST_SIZE 32
 #define SCMP_QUEUE 1
-#define INVALID_NODE_ID ((NodeId) -1)
 
 using namespace boost;
 

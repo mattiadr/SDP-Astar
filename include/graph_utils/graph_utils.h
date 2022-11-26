@@ -6,6 +6,7 @@
 
 #define LCG_MULTIPLIER 22695477
 #define LCG_INCREMENT 1
+#define INVALID_NODE_ID ((NodeId) -1)
 
 using namespace boost;
 

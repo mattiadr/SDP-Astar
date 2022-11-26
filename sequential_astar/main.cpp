@@ -12,7 +12,7 @@ typedef std::pair<unsigned int, double> NodeFCost;
 
 // Reconstruct path from graph and list of costs to nodes
 std::pair<double, std::vector<unsigned int>>
-reconstruct_path(const Graph &g, unsigned int source, unsigned int target, std::vector<unsigned int> &cameFrom) {
+reconstruct_path(const Graph &g, unsigned int source, unsigned int target, const NodeId *cameFrom) {
 	double path_weight = 0;
 	std::vector<unsigned int> path;
 	path.emplace_back(target);
@@ -33,8 +33,9 @@ astar_sequential(const Graph &g, unsigned int source, unsigned int target, stats
 	std::priority_queue<NodeFCost, std::vector<NodeFCost>, decltype(comp)> openSet;
 	std::set<unsigned int> closedSet;
 	unsigned long long V = num_vertices(g);
-	std::vector<double> costToCome(V, DBL_MAX);
-	std::vector<unsigned int> cameFrom(V);
+	double *costToCome = new double[V];
+	std::fill_n(costToCome, V, DBL_MAX);
+	NodeId *cameFrom = new NodeId[V];
 
 	costToCome[source] = 0;
 	openSet.push(NodeFCost(source, 0));
@@ -67,6 +68,9 @@ astar_sequential(const Graph &g, unsigned int source, unsigned int target, stats
 			openSet.push(NodeFCost(e.m_target, fCost));
 		}
 	}
+
+	delete[] costToCome;
+	delete[] cameFrom;
 
 	return std::make_pair(-1, std::vector<unsigned int>());
 }

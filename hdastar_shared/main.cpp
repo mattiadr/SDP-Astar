@@ -10,7 +10,6 @@
 
 
 #define N_THREADS 16
-#define INVALID_NODE_ID ((NodeId) -1)
 
 #define myOpenSet openSets[threadId]
 #define myOpenSetMutex openSetMutexes[threadId]
