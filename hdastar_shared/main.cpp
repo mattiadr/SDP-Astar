@@ -1,3 +1,4 @@
+#include <queue>
 #include <iostream>
 #include <thread>
 #include <mutex>
@@ -6,7 +7,6 @@
 
 #include "../include/graph_utils/graph_utils.h"
 #include "../include/stats/stats.h"
-#include "../include/queue/scmp_queue.h"
 
 
 #define N_THREADS 16
@@ -39,7 +39,6 @@ std::vector<std::mutex> openSetMutexes(N_THREADS);
 
 // came from
 NodeId *cameFrom;
-std::mutex cameFromMutex;
 
 // cost to come
 double *costToCome;
@@ -69,9 +68,12 @@ bool has_finished() {
 }
 
 void hdastar_shared(const unsigned int threadId, const Graph &g, const NodeId &pathStart, const NodeId &pathEnd, stats &stat) {
+	NodeFCost nfc;
 	while (true) {
 		// termination condition
+		std::unique_lock lock1(myOpenSetMutex);
 		if (myOpenSet->empty()) {
+			lock1.unlock();
 			barrier.arrive_and_wait();
 			// set finished flag
 			finished[threadId] = myOpenSet->empty();
@@ -86,12 +88,10 @@ void hdastar_shared(const unsigned int threadId, const Graph &g, const NodeId &p
 		}
 
 		// pop first from open set
-		NodeFCost nfc;
-		{
-			std::unique_lock lock(myOpenSetMutex);
-			nfc = myOpenSet->top();
-			myOpenSet->pop();
-		}
+		nfc = myOpenSet->top();
+		myOpenSet->pop();
+		lock1.unlock();
+
 		if (nfc.fCost >= bestPathWeight)
 			continue;
 
@@ -122,11 +122,8 @@ void hdastar_shared(const unsigned int threadId, const Graph &g, const NodeId &p
 				std::unique_lock lock(costToComeMutexes[targetThread]);
 				if (costToCome[target] > gCost) {
 					costToCome[target] = gCost;
+					cameFrom[target] = nfc.node;
 					lock.unlock();
-					{
-						std::unique_lock lock2(cameFromMutex);
-						cameFrom[target] = nfc.node;
-					}
 					{
 						std::unique_lock lock2(openSetMutexes[targetThread]);
 						openSets[targetThread]->push(NodeFCost{.node = target, .fCost = fCost});
