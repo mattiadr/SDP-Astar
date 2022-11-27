@@ -110,7 +110,7 @@ void hdastar_shared(const unsigned int threadId, const Graph &g, const NodeId &p
 			std::unique_lock lock(costToComeMutexes[hash_node_id(nfc.node, N_THREADS)]);
 			ctc = costToCome[nfc.node];
 		}
-		stat.addNodeVisited();
+		stat.addNodeVisited(threadId);
 		for (auto neighbor: make_iterator_range(out_edges(nfc.node, g))) {
 			NodeId target = neighbor.m_target;
 			double weight = get(edge_weight, g, neighbor);

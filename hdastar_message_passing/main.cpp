@@ -141,7 +141,7 @@ void hdastar_distributed(const unsigned int threadId, const Graph &g, const Node
 
 		// iterate over neighbors
 		double ctc = costToCome[n.first];
-		stat.addNodeVisited();
+		stat.addNodeVisited(threadId);
 		for (auto neighbor: make_iterator_range(out_edges(n.first, g))) {
 			double weight = get(edge_weight, g, neighbor);
 			double gCost = ctc + weight;

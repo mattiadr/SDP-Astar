@@ -5,6 +5,7 @@
 #include <iostream>
 #include <fstream>
 #include <atomic>
+#include <numeric>
 
 #include "../graph_utils/graph_utils.h"
 
@@ -20,11 +21,13 @@ class stats {
 	double totalCost;
 	unsigned int totalSteps;
 	std::vector<TimePointPair> timePoints;
-	std::atomic<unsigned int> nodeVisited = 0;
+	std::vector<unsigned int> nodeVisited;
 
 public:
 	stats(const std::string &algorithm, unsigned int nThreads, const std::string &inputFile, unsigned long seed)
-			: algorithm(algorithm), nThreads(nThreads), inputFile(inputFile), seed(seed) {}
+			: algorithm(algorithm), nThreads(nThreads), inputFile(inputFile), seed(seed) {
+		nodeVisited = std::vector<unsigned int>(nThreads, 0);
+	}
 
 	void setTotalCost(double totalCost) {
 		stats::totalCost = totalCost;
@@ -34,8 +37,8 @@ public:
 		stats::totalSteps = totalSteps;
 	}
 
-	void addNodeVisited() {
-		nodeVisited++;
+	void addNodeVisited(NodeId threadId) {
+		nodeVisited[threadId]++;
 	}
 
 	void timeStep(const std::string &stepName) {
@@ -59,8 +62,9 @@ public:
 			else if (timePoints[i].second == "Path reconstruction")
 				pathRecTime = duration_cast<duration<double>>(timePoints[i].first - timePoints[i - 1].first).count();
 		}
+		unsigned int totalNodeVisited = std::reduce(nodeVisited.begin(), nodeVisited.end());
 		outFile << algorithm << "," << nThreads << "," << inputFile << "," << seed << "," << totalCost << ","
-				<< totalSteps << "," << graphReadTime << "," << astarTime << "," << pathRecTime << "," << nodeVisited << ",";
+				<< totalSteps << "," << graphReadTime << "," << astarTime << "," << pathRecTime << "," << totalNodeVisited << ",";
 		int i;
 		for (i = 0; i < path.size() - 1; i++)
 			outFile << path[i] << "-";
