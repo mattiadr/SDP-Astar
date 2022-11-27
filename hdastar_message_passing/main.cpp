@@ -73,20 +73,17 @@ bool has_finished() {
 // empty message queue
 void process_queue(const unsigned int threadId, Message &m,
 				   std::priority_queue<NodeFCost, std::vector<NodeFCost>, decltype(queue_comparator)> &openSet,
-				   std::unordered_map<NodeId, double> &costToCome,
-				   std::unordered_map<NodeId, NodeId> &cameFrom,
-				   double &bestPathWeight) {
+				   double *costToCome, NodeId *cameFrom, double &bestPathWeight) {
 	std::unordered_map<NodeId, double>::iterator iter;
 	while (messageQueues[threadId]->pop(m)) {
 		switch (m.type) {
 			// move work messages to open set if no duplicates
 			case WORK:
 				if (m.fCost < bestPathWeight) {
-					iter = costToCome.find(m.target);
-					if ((iter == costToCome.end() || iter->second > m.gCost)) {
+					if (costToCome[m.target] > m.gCost) {
 						openSet.push(NodeFCost(m.target, m.fCost));
-						costToCome.insert_or_assign(m.target, m.gCost);
-						cameFrom.insert_or_assign(m.target, m.parent);
+						costToCome[m.target] = m.gCost;
+						cameFrom[m.target] = m.parent;
 					}
 				}
 				break;
@@ -103,9 +100,11 @@ void process_queue(const unsigned int threadId, Message &m,
 
 void hdastar_distributed(const unsigned int threadId, const Graph &g, const NodeId &pathStart, const NodeId &pathEnd, stats &stat) {
 	std::priority_queue<NodeFCost, std::vector<NodeFCost>, decltype(queue_comparator)> openSet(queue_comparator);
-	std::unordered_map<NodeId, double> costToCome;
-	std::unordered_map<NodeId, double>::iterator iter;
-	std::unordered_map<NodeId, NodeId> cameFrom;
+	unsigned int N = num_vertices(g);
+	double *costToCome = new double[N];
+	std::fill_n(costToCome, N, DBL_MAX);
+	NodeId *cameFrom = new NodeId[N];
+	std::fill_n(cameFrom, N, INVALID_NODE_ID);
 	double bestPathWeight = DBL_MAX;
 	Message m;
 
@@ -147,7 +146,7 @@ void hdastar_distributed(const unsigned int threadId, const Graph &g, const Node
 		}
 
 		// iterate over neighbors
-		double ctc = costToCome.at(n.first);
+		double ctc = costToCome[n.first];
 		stat.addNodeVisited();
 		for (auto neighbor: make_iterator_range(out_edges(n.first, g))) {
 			double weight = get(edge_weight, g, neighbor);
@@ -158,11 +157,10 @@ void hdastar_distributed(const unsigned int threadId, const Graph &g, const Node
 				unsigned int targetThread = hash_node_id(neighbor.m_target, N_THREADS);
 				if (targetThread == threadId) {
 					// send to this open set
-					iter = costToCome.find((NodeId) neighbor.m_target);
-					if ((iter == costToCome.end() || iter->second > gCost)) {
-						openSet.push(NodeFCost((NodeId) neighbor.m_target, fCost));
-						costToCome.insert_or_assign((NodeId) neighbor.m_target, gCost);
-						cameFrom.insert_or_assign((NodeId) neighbor.m_target, n.first);
+					if (costToCome[neighbor.m_target] > gCost) {
+						openSet.push(NodeFCost(neighbor.m_target, fCost));
+						costToCome[neighbor.m_target] = gCost;
+						cameFrom[neighbor.m_target] = n.first;
 					}
 				} else {
 					// create message
@@ -176,6 +174,8 @@ void hdastar_distributed(const unsigned int threadId, const Graph &g, const Node
 
 	if (threadId == 0)
 		stat.timeStep("Astar");
+
+	delete[] costToCome;
 
 	// Path Reconstruction
 	if (hash_node_id(pathEnd, N_THREADS) == threadId) {
@@ -200,13 +200,15 @@ void hdastar_distributed(const unsigned int threadId, const Graph &g, const Node
 					for (int i = 0; i < N_THREADS; i++)
 						if (i != threadId)
 							semaphores[i]->release();
+					delete[] cameFrom;
 					return;
 				} else {
-					try {
-						prev = cameFrom.at(m.target);
-					} catch (const std::out_of_range &e) {
+					prev = cameFrom[m.target];
+					if (prev == INVALID_NODE_ID) {
 						std::cerr << "Error reconstructing path: "<< m.target << " Nodes parent not found" << std::endl;
-						throw e;
+						// TODO error handling
+						delete[] cameFrom;
+						return;
 					}
 					prevThread = hash_node_id(prev, N_THREADS);
 					messageQueues[prevThread]->push(Message{.type = PATH_RECONSTRUCTION, .target = prev});
@@ -214,6 +216,7 @@ void hdastar_distributed(const unsigned int threadId, const Graph &g, const Node
 				}
 				break;
 			case PATH_END:
+				delete[] cameFrom;
 				return;
 			default:
 				std::cerr << "PATH RECONSTRUCTION " << threadId << " : Invalid message type: " << m.type << std::endl;

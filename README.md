@@ -14,10 +14,8 @@ Different helper scripts are used to generate the graphs used to test the algori
 ## Astar algorithms
 The different algorithms are contained in the following folders:
 - `sequential_astar`: Sequential version of astar
-- `hdastar_distributed`: Parallel version of hdastar that uses message_passing and barriers to synchronize threads 
+- `hdastar_message_passing`: Parallel version of hdastar that uses message_passing and barriers to synchronize threads 
 - `hdastar_shared`: Parallel version of hdastar that use shared memory and barriers to synchronize threads
-
-[//]: # (- TODO refactor names of algorithms)
 
 ## Build
 Precompiled binaries are provided for windows_x86_64 and for linux_x86_64 in the folder:
@@ -31,15 +29,13 @@ The project contains the `CMakeLists.txt` to be used with cmake to build the dif
 Targets:
 - `graph_generation`
 - `sequential_astar`
-- `hdastar_distributed`
+- `hdastar_message_passing`
 
 Example:
 ```
 cmake -S SDP-Astar/ -B build_folder/
 cmake --build build_folder/ --target sequential_astar -j 12
 ```
-
-[//]: # (TODO Check if there are differences in the CMakeLists for windows or linux)
 
 ## Run
 Once compiled the algorithms should be executed with the filename of the graph input file and a seed. The seed is used to randomly choose the start and end points in the graph.
