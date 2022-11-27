@@ -18,6 +18,10 @@ reconstruct_path(const Graph &g, unsigned int source, unsigned int target, const
 	path.emplace_back(target);
 	unsigned int current = target;
 	while (current != source) {
+		if (cameFrom[current] == INVALID_NODE_ID) {
+			std::cerr << "sequential_astar: Error during path reconstruction: Node " << current << " parent not found" << std::endl;
+			return std::make_pair(path_weight, path);
+		}
 		current = cameFrom[current];
 		path_weight += get(edge_weight, g, edge(current, target, g).first);
 		target = current;
@@ -36,6 +40,7 @@ astar_sequential(const Graph &g, unsigned int source, unsigned int target, stats
 	double *costToCome = new double[V];
 	std::fill_n(costToCome, V, DBL_MAX);
 	NodeId *cameFrom = new NodeId[V];
+	std::fill_n(cameFrom, V, INVALID_NODE_ID);
 
 	costToCome[source] = 0;
 	openSet.push(NodeFCost(source, 0));
@@ -54,7 +59,7 @@ astar_sequential(const Graph &g, unsigned int source, unsigned int target, stats
 		if (closedSet.find(curr) != closedSet.end())
 			continue;
 		closedSet.insert(curr);
-		s.addNodeVisited();
+		s.addNodeVisited(0);
 		for (auto e: make_iterator_range(out_edges(curr, g))) {
 			auto edge_w = get(edge_weight, g, e);
 			if (closedSet.find(e.m_target) != closedSet.end())
@@ -104,8 +109,8 @@ int main(int argc, char *argv[]) {
 	auto path = path_pair.second;
 
 	if (path_weight < 0) {
-		std::cout << "Unable to find a path" << std::endl;
-		return 2;
+//		std::cerr << "Unable to find a path" << std::endl;
+		return 3;
 	}
 
 	// Print path

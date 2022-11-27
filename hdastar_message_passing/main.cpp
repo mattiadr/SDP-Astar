@@ -39,10 +39,12 @@ typedef struct {
 
 const auto queue_comparator = [](const NodeFCost &a, const NodeFCost &b) { return a.second > b.second; };
 
+bool PATH_EXISTS = false;
 std::vector<std::thread> threads(N_THREADS);
 std::vector<std::unique_ptr<lockfree::queue<Message>>> messageQueues(N_THREADS);
 std::barrier barrier(N_THREADS);
 std::vector<bool> finished(N_THREADS);
+bool pathReconstructed = false;
 std::vector<NodeId> path;
 std::vector<std::unique_ptr<std::counting_semaphore<N_THREADS>>> semaphores(N_THREADS);
 
@@ -55,12 +57,14 @@ void broadcast_message(const Message &m, const unsigned int senderId) {
 	}
 }
 
-bool has_finished() {
+bool has_finished(double &bestPathWeight) {
 	for (int i = 0; i < N_THREADS; i++) {
 		if (!finished[i]) {
 			return false;
 		}
 	}
+	if (PATH_EXISTS && bestPathWeight == DBL_MAX)
+		return false;
 	return true;
 }
 
@@ -115,7 +119,7 @@ void hdastar_distributed(const unsigned int threadId, const Graph &g, const Node
 			barrier.arrive_and_wait();
 
 			// check if all threads finished working, otherwise continue
-			if (has_finished()) {
+			if (has_finished(bestPathWeight)) {
 				break;
 			} else {
 				continue;
@@ -191,6 +195,7 @@ void hdastar_distributed(const unsigned int threadId, const Graph &g, const Node
 
 				if (m.target == pathStart) {
 					broadcast_message(Message{.type = PATH_END}, threadId);
+					pathReconstructed = true;
 					for (int i = 0; i < N_THREADS; i++)
 						if (i != threadId)
 							semaphores[i]->release();
@@ -199,8 +204,12 @@ void hdastar_distributed(const unsigned int threadId, const Graph &g, const Node
 				} else {
 					prev = cameFrom[m.target];
 					if (prev == INVALID_NODE_ID) {
-						std::cerr << "Error reconstructing path: "<< m.target << " Nodes parent not found" << std::endl;
-						// TODO error handling
+						std::cerr << "hdastar_message_passing: Error reconstructing path: "<< m.target << " Nodes parent not found" << std::endl;
+						pathReconstructed = false;
+						broadcast_message(Message{.type = PATH_END}, threadId);
+						for (int i = 0; i < N_THREADS; i++)
+						if (i != threadId)
+							semaphores[i]->release();
 						delete[] cameFrom;
 						return;
 					}
@@ -222,6 +231,11 @@ int main(int argc, char *argv[]) {
 	if (argc < 3) {
 		std::cerr << "Usage: " << argv[0] << " FILENAME SEED" << std::endl;
 		return 1;
+	}
+
+	// launcher mode
+	if (argc == 4) {
+		PATH_EXISTS = true;
 	}
 	char* filename = argv[1];
 
@@ -257,24 +271,21 @@ int main(int argc, char *argv[]) {
 	for (int i = 0; i < N_THREADS; i++) {
 		threads[i].join();
 	}
-	s.timeStep("Path reconstruction");
-	s.printTimeStats();
 
-	// Print path to stdout
-//	for (unsigned int node : path) {
-//		std::cout << node << " -> ";
-//	}
-//	std::cout << std::endl;
+	if (pathReconstructed) {
+		s.timeStep("Path reconstruction");
+		s.printTimeStats();
 
-	// Print paths total cost
-	double cost = 0;
-	for (int i = 1; i < path.size(); i++) {
-		cost += get(edge_weight, g, edge(path[i-1], path[i], g).first);
+		// Print paths total cost
+		double cost = 0;
+		for (int i = 1; i < path.size(); i++) {
+			cost += get(edge_weight, g, edge(path[i - 1], path[i], g).first);
+		}
+		std::cout << "Total cost: " << cost << std::endl;
+		std::cout << "Total steps: " << path.size() << std::endl;
+
+		s.setTotalCost(cost);
+		s.setTotalSteps(path.size());
+		s.dump_csv(path);
 	}
-	std::cout << "Total cost: " << cost << std::endl;
-	std::cout << "Total steps: " << path.size() << std::endl;
-
-	s.setTotalCost(cost);
-	s.setTotalSteps(path.size());
-	s.dump_csv(path);
 }

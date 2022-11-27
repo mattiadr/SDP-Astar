@@ -31,6 +31,7 @@ typedef std::priority_queue<NodeFCost, std::vector<NodeFCost>, decltype(queue_co
 
 /** globals **/
 
+bool PATH_EXISTS = false;
 std::vector<std::thread> threads(N_THREADS);
 
 // open sets
@@ -64,6 +65,8 @@ bool has_finished() {
 			return false;
 		}
 	}
+	if (PATH_EXISTS && bestPathWeight == DBL_MAX)
+		return false;
 	return true;
 }
 
@@ -134,19 +137,19 @@ void hdastar_shared(const unsigned int threadId, const Graph &g, const NodeId &p
 	}
 }
 
-void path_reconstruction(const Graph &g, const NodeId &pathStart, const NodeId &pathEnd, stats &stat) {
+int path_reconstruction(const Graph &g, const NodeId &pathStart, const NodeId &pathEnd, stats &stat) {
 	NodeId curr = pathEnd;
 	while (true) {
 		path.insert(path.begin(), curr);
 
 		if (curr == pathStart)
-			return;
+			return 0;
 
-		curr = cameFrom[curr];
-		if (curr == INVALID_NODE_ID) {
-			std::cerr << "Error during path reconstruction: Node " << curr << " parent not found" << std::endl;
-			return;
+		if (cameFrom[curr] == INVALID_NODE_ID) {
+			std::cerr << "hdastar_shared: Error during path reconstruction: Node " << curr << " parent not found" << std::endl;
+			return 1;
 		}
+		curr = cameFrom[curr];
 	}
 }
 
@@ -155,6 +158,11 @@ int main(int argc, char *argv[]) {
 	if (argc < 3) {
 		std::cerr << "Usage: " << argv[0] << " FILENAME SEED" << std::endl;
 		return 1;
+	}
+
+	// launcher mode
+	if (argc == 4) {
+		PATH_EXISTS = true;
 	}
 
 	// read seed
@@ -207,23 +215,24 @@ int main(int argc, char *argv[]) {
 	s.timeStep("Astar");
 
 	// path reconstruction
-	path_reconstruction(ref(g), source, dest, ref(s));
-	s.timeStep("Path reconstruction");
-	s.printTimeStats();
+	if (!path_reconstruction(ref(g), source, dest, ref(s))) {
+		s.timeStep("Path reconstruction");
+		s.printTimeStats();
+
+		// print paths total cost
+		double cost = 0;
+		for (int i = 1; i < path.size(); i++) {
+			cost += get(edge_weight, g, edge(path[i - 1], path[i], g).first);
+		}
+		std::cout << "Total cost: " << cost << std::endl;
+		std::cout << "Total steps: " << path.size() << std::endl;
+
+		s.setTotalCost(cost);
+		s.setTotalSteps(path.size());
+		s.dump_csv(path);
+	}
 
 	// free resources
 	delete[] cameFrom;
 	delete[] costToCome;
-
-	// print paths total cost
-	double cost = 0;
-	for (int i = 1; i < path.size(); i++) {
-		cost += get(edge_weight, g, edge(path[i - 1], path[i], g).first);
-	}
-	std::cout << "Total cost: " << cost << std::endl;
-	std::cout << "Total steps: " << path.size() << std::endl;
-
-	s.setTotalCost(cost);
-	s.setTotalSteps(path.size());
-	s.dump_csv(path);
 }
