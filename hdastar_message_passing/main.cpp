@@ -8,11 +8,9 @@
 
 #include "../include/graph_utils/graph_utils.h"
 #include "../include/stats/stats.h"
-#include "../include/queue/scmp_queue.h"
 
 #define N_THREADS 16
 #define FREELIST_SIZE 32
-#define SCMP_QUEUE 1
 
 using namespace boost;
 
@@ -42,11 +40,7 @@ typedef struct {
 const auto queue_comparator = [](const NodeFCost &a, const NodeFCost &b) { return a.second > b.second; };
 
 std::vector<std::thread> threads(N_THREADS);
-#if SCMP_QUEUE
-std::vector<std::unique_ptr<scmp_queue<Message>>> messageQueues(N_THREADS);
-#else
 std::vector<std::unique_ptr<lockfree::queue<Message>>> messageQueues(N_THREADS);
-#endif
 std::barrier barrier(N_THREADS);
 std::vector<bool> finished(N_THREADS);
 std::vector<NodeId> path;
@@ -237,7 +231,7 @@ int main(int argc, char *argv[]) {
 		std::cerr << "SEED must be a number, got " << argv[2] << " instead" << std::endl;
 		return 2;
 	}
-	stats s("HDA*", N_THREADS, filename, seed);
+	stats s("HDA* Message Passing", N_THREADS, filename, seed);
 	s.timeStep("Start");
 	Graph g = read_graph(filename);
 
@@ -248,11 +242,7 @@ int main(int argc, char *argv[]) {
 	s.timeStep("Read graph");
 
 	for (int i = 0; i < N_THREADS; i++) {
-#if SCMP_QUEUE
-		messageQueues[i] = std::make_unique<scmp_queue<Message>>();
-#else
 		messageQueues[i] = std::make_unique<lockfree::queue<Message>>(FREELIST_SIZE);
-#endif
 		semaphores[i] = std::make_unique<std::counting_semaphore<N_THREADS>>(0);
 	}
 

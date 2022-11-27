@@ -204,7 +204,7 @@ int main(int argc, char *argv[]) {
 	for (int i = 0; i < N_THREADS; i++) {
 		threads[i].join();
 	}
-	s.timeStep("A star");
+	s.timeStep("Astar");
 
 	// path reconstruction
 	path_reconstruction(ref(g), source, dest, ref(s));
