@@ -108,8 +108,6 @@ int main(int argc, char *argv[]) {
 		}
 	}
 
-	// TODO check if graph is connected
-
 	fclose(graph_file);
 	std::cerr << "Done!" << std::endl;
 
