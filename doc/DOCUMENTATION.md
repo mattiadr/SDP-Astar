@@ -101,16 +101,30 @@ Every time a thread find that its openSet is empty, it hits a barrier, waiting f
 the barrier, they can check if every other thread has finished its work, in that case we know that the best path has
 been found and can be reconstructed.
 
+### Path reconstruction
+
+The path is reconstructed starting from the `cameFrom` array which contains the parent of all the nodes explored,
+starting from the destination node we add the parent to the path until we reach the source node.
+
+In the shared version the `cameFrom` array is a global variable and the path can be reconstructed by the main thread
+once all the worker threads finished, so we can expect the same performance of the sequential one.
+
+In the message passing version instead the information on the parent of a node is known only by the owner of that node,
+and we have to use messages and semaphores to synchronize the threads and reconstruct the path. In this case we can
+expect worse performance compared to the other versions caused by the overhead of the messages and the semaphores.
+
 ## Results
 
 All the results presented are obtained on a Windows machine with an AMD Ryzen 7 3700X with 8 physical cores and 16
 logical threads. The executables are compiled using MSVC 17.0 and cmake 3.23.2 with option `-DCMAKE_BUILD_TYPE=Release`
-to optimize the binary for performance.
+to optimize the binaries for performance.
 
 ### Test graphs
 
 To test the performance of the different algorithms we used 4 different graphs, 2 generated with `graph_generation` with
-different sizes and K neighbors and 2 generated starting from real cities using OpenStreetMap API.
+different sizes and K neighbors and 2 generated starting from real cities using OpenStreetMap API. The edges in the
+graph represents real roads in the cities, and to each type of road has been assigned a different weight to make a more
+realistic simulation. 
 
 - `k-neargraph_`
 - `k-neargraph_`
@@ -118,3 +132,21 @@ different sizes and K neighbors and 2 generated starting from real cities using 
 - `newyork.txt`: 3946582 nodes. Includes New York and part of Philadelphia
 
 [//]: # (TODO add info on k-neargraph)
+
+### Path reconstruction
+
+To test path reconstruction time we averaged the time of 100 runs of the algorithms with 20 different source and
+destination points for each graph.
+
+As we expected the time needed for the sequential and the shared version are the same, the message passing instead is
+slower in all cases. 
+
+### Results by type of graph
+
+### Results by processor count
+
+### Results by path length
+
+### Results by total node visited
+
+
