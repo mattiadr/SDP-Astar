@@ -10,10 +10,8 @@ De Rosa Mattia s303379
 
 ## Problem description
 
-The proposed problem requires to compare the performance of different implementations of the path-planning algorithm A*.
-
-We chose to develop a sequential version to use for reference and 2 parallel versions. One based on shared memory and
-the other one on message passing.
+The proposed problem requires to compare the performance of different parallel implementations of the path-planning
+algorithm A*.
 
 The main problems of the parallel versions compared to the sequential ones are the exploration of already explored nodes
 and the termination condition.
@@ -28,6 +26,8 @@ exploring until all the paths remaining are surely worse than the best found. In
 sequential version to explore a minimal part of the graph resulting in better performance than the parallel one.
 
 ## Implementation
+We chose to develop a sequential version to use for reference and 2 parallel versions. One based on shared memory and
+the other one on message passing.
 
 The algorithms are implemented in C++ with additional boost libraries:
 - `boost/graph/adjacency_list` - Graph library used to store the graph as an adjacency list.
@@ -87,6 +87,8 @@ reading from the queue should be lock-free in most cases.
 
 [//]: # (TODO Add something on the shared version)
 
+[//]: # (TODO Add specifics on both parallel algorithms)
+
 ### Termination condition
 
 The basic termination condition for a parallel implementation of A* could be to stop every thread as soon as every
@@ -98,3 +100,21 @@ is acceptable only if the heuristic function never overestimates the goal (_admi
 Every time a thread find that its openSet is empty, it hits a barrier, waiting for the other threads. When everyone hit
 the barrier, they can check if every other thread has finished its work, in that case we know that the best path has
 been found and can be reconstructed.
+
+## Results
+
+All the results presented are obtained on a Windows machine with an AMD Ryzen 7 3700X with 8 physical cores and 16
+logical threads. The executables are compiled using MSVC 17.0 and cmake 3.23.2 with option `-DCMAKE_BUILD_TYPE=Release`
+to optimize the binary for performance.
+
+### Test graphs
+
+To test the performance of the different algorithms we used 4 different graphs, 2 generated with `graph_generation` with
+different sizes and K neighbors and 2 generated starting from real cities using OpenStreetMap API.
+
+- `k-neargraph_`
+- `k-neargraph_`
+- `berlin.txt`: 364873 nodes
+- `newyork.txt`: 3946582 nodes. Includes New York and part of Philadelphia
+
+[//]: # (TODO add info on k-neargraph)
