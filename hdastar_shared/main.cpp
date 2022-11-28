@@ -70,7 +70,8 @@ bool has_finished() {
 	return true;
 }
 
-void hdastar_shared(const unsigned int threadId, const Graph &g, const NodeId &pathStart, const NodeId &pathEnd, stats &stat) {
+void hdastar_shared(const unsigned int threadId, const Graph &g, const NodeId &pathStart, const NodeId &pathEnd,
+                    stats &stat) {
 	NodeFCost nfc;
 	while (true) {
 		// termination condition
@@ -146,7 +147,8 @@ int path_reconstruction(const Graph &g, const NodeId &pathStart, const NodeId &p
 			return 0;
 
 		if (cameFrom[curr] == INVALID_NODE_ID) {
-			std::cerr << "hdastar_shared: Error during path reconstruction: Node " << curr << " parent not found" << std::endl;
+			std::cerr << "hdastar_shared: Error during path reconstruction: Node " << curr << " parent not found"
+			          << std::endl;
 			return 1;
 		}
 		curr = cameFrom[curr];
@@ -156,83 +158,101 @@ int path_reconstruction(const Graph &g, const NodeId &pathStart, const NodeId &p
 int main(int argc, char *argv[]) {
 	// print usage
 	if (argc < 3) {
-		std::cerr << "Usage: " << argv[0] << " FILENAME SEED" << std::endl;
+		std::cerr << "Usage: " << argv[0] << " FILENAME STARTING_SEED [N_SEEDS=1] [N_REPS=1]" << std::endl;
 		return 1;
 	}
 
-	// launcher mode
-	if (argc == 4) {
-		PATH_EXISTS = true;
-	}
-
-	// read seed
-	char *parseEnd;
-	unsigned long seed = strtol(argv[2], &parseEnd, 10);
-	if (*parseEnd != '\0') {
-		std::cerr << "SEED must be a number, got " << argv[2] << " instead" << std::endl;
+	// parse command line parameters
+	char *filename = argv[1];
+	unsigned long seed;
+	unsigned int nSeeds = 1;
+	unsigned int nReps = 1;
+	try {
+		seed = std::stoul(argv[2]);
+		if (argc >= 4)
+			nSeeds = std::stoul(argv[3]);
+		if (argc >= 5)
+			nReps = std::stoul(argv[4]);
+	} catch (std::invalid_argument const &e) {
+		std::cerr << "Invalid command line parameter" << std::endl;
 		return 2;
 	}
 
+	// launcher mode
+	if (argc >= 6)
+		PATH_EXISTS = true;
+
 	// read graph
-	char *filename = argv[1];
-	stats s("HDA* Shared Memory", N_THREADS, filename, seed);
-	s.timeStep("Start");
 	Graph g = read_graph(filename);
-
-	// generate source and dest from seed
 	unsigned int N = num_vertices(g);
+
 	NodeId source, dest;
-	randomize_source_dest(seed, N, source, dest);
-	s.timeStep("Read graph");
 
-	// init open sets
-	for (int i = 0; i < N_THREADS; i++) {
-		openSets[i] = std::make_unique<OpenSet>(queue_comparator);
-	}
+	// monte carlo simulation
+	for (int i = 0; i < nSeeds * nReps; i++) {
+		// randomize seed every nReps runs
+		if (i % nReps == 0)
+			randomize_source_dest(seed, N, source, dest);
 
-	// init arrays
-	cameFrom = new NodeId[N];
-	std::fill_n(cameFrom, N, INVALID_NODE_ID);
+		std::cerr << "Repetition " << i / nReps << ", " << i % nReps << std::endl;
+		stats s("HDA* Message Passing", N_THREADS, filename, seed);
+		s.timeStep("Start");
 
-	costToCome = new double[N];
-	std::fill_n(costToCome, N, DBL_MAX);
-	costToCome[source] = 0;
-
-	// push first node and set cost to come
-	NodeFCost nfc{.node = (NodeId) source, .fCost = 0};
-	openSets[hash_node_id(source, N_THREADS)]->push(nfc);
-	s.timeStep("Init done");
-
-	// run threads
-	for (int i = 0; i < N_THREADS; i++) {
-		threads[i] = std::thread(hdastar_shared, i, ref(g), source, dest, ref(s));
-	}
-
-	// join threads
-	for (int i = 0; i < N_THREADS; i++) {
-		threads[i].join();
-	}
-	s.timeStep("Astar");
-
-	// path reconstruction
-	if (!path_reconstruction(ref(g), source, dest, ref(s))) {
-		s.timeStep("Path reconstruction");
-		s.printTimeStats();
-
-		// print paths total cost
-		double cost = 0;
-		for (int i = 1; i < path.size(); i++) {
-			cost += get(edge_weight, g, edge(path[i - 1], path[i], g).first);
+		// init open sets
+		for (int j = 0; j < N_THREADS; j++) {
+			openSets[j] = std::make_unique<OpenSet>(queue_comparator);
 		}
-		std::cout << "Total cost: " << cost << std::endl;
-		std::cout << "Total steps: " << path.size() << std::endl;
 
-		s.setTotalCost(cost);
-		s.setTotalSteps(path.size());
-		s.dump_csv(path);
+		// init arrays
+		cameFrom = new NodeId[N];
+		std::fill_n(cameFrom, N, INVALID_NODE_ID);
+
+		costToCome = new double[N];
+		std::fill_n(costToCome, N, DBL_MAX);
+		costToCome[source] = 0;
+
+		// push first node and set cost to come
+		NodeFCost nfc{.node = (NodeId) source, .fCost = 0};
+		openSets[hash_node_id(source, N_THREADS)]->push(nfc);
+		s.timeStep("Init done");
+
+		// run threads
+		for (int j = 0; j < N_THREADS; j++) {
+			threads[j] = std::thread(hdastar_shared, j, ref(g), source, dest, ref(s));
+		}
+
+		for (int j = 0; j < N_THREADS; j++) {
+			threads[j].join();
+		}
+		s.timeStep("Astar");
+
+		// path reconstruction
+		if (!path_reconstruction(ref(g), source, dest, ref(s))) {
+			s.timeStep("Path reconstruction");
+			s.printTimeStats();
+
+			// print paths total cost
+			double cost = 0;
+			for (int j = 1; j < path.size(); j++) {
+				cost += get(edge_weight, g, edge(path[j - 1], path[j], g).first);
+			}
+			std::cout << "Total cost: " << cost << std::endl;
+			std::cout << "Total steps: " << path.size() << std::endl;
+
+			s.setTotalCost(cost);
+			s.setTotalSteps(path.size());
+			s.dump_csv(path);
+		}
+
+		// free resources
+		delete[] cameFrom;
+		delete[] costToCome;
+
+		// cleanup global variables
+		bestPathWeight = DBL_MAX;
+		path.clear();
+		std::fill(finished.begin(), finished.end(), false);
 	}
 
-	// free resources
-	delete[] cameFrom;
-	delete[] costToCome;
+	return 0;
 }

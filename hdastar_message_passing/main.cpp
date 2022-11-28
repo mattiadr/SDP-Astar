@@ -70,9 +70,8 @@ bool has_finished(double &bestPathWeight) {
 
 // empty message queue
 void process_queue(const unsigned int threadId, Message &m,
-				   std::priority_queue<NodeFCost, std::vector<NodeFCost>, decltype(queue_comparator)> &openSet,
-				   double *costToCome, NodeId *cameFrom, double &bestPathWeight) {
-	std::unordered_map<NodeId, double>::iterator iter;
+                   std::priority_queue<NodeFCost, std::vector<NodeFCost>, decltype(queue_comparator)> &openSet,
+                   double *costToCome, NodeId *cameFrom, double &bestPathWeight) {
 	while (messageQueues[threadId]->pop(m)) {
 		switch (m.type) {
 			// move work messages to open set if no duplicates
@@ -96,7 +95,8 @@ void process_queue(const unsigned int threadId, Message &m,
 	}
 }
 
-void hdastar_distributed(const unsigned int threadId, const Graph &g, const NodeId &pathStart, const NodeId &pathEnd, stats &stat) {
+void hdastar_distributed(const unsigned int threadId, const Graph &g, const NodeId &pathStart, const NodeId &pathEnd,
+                         stats &stat) {
 	std::priority_queue<NodeFCost, std::vector<NodeFCost>, decltype(queue_comparator)> openSet(queue_comparator);
 	unsigned int N = num_vertices(g);
 	double *costToCome = new double[N];
@@ -204,12 +204,13 @@ void hdastar_distributed(const unsigned int threadId, const Graph &g, const Node
 				} else {
 					prev = cameFrom[m.target];
 					if (prev == INVALID_NODE_ID) {
-						std::cerr << "hdastar_message_passing: Error reconstructing path: "<< m.target << " Nodes parent not found" << std::endl;
+						std::cerr << "hdastar_message_passing: Error reconstructing path: " << m.target
+						          << " Nodes parent not found" << std::endl;
 						pathReconstructed = false;
 						broadcast_message(Message{.type = PATH_END}, threadId);
 						for (int i = 0; i < N_THREADS; i++)
-						if (i != threadId)
-							semaphores[i]->release();
+							if (i != threadId)
+								semaphores[i]->release();
 						delete[] cameFrom;
 						return;
 					}
@@ -228,64 +229,90 @@ void hdastar_distributed(const unsigned int threadId, const Graph &g, const Node
 }
 
 int main(int argc, char *argv[]) {
+	// print usage
 	if (argc < 3) {
-		std::cerr << "Usage: " << argv[0] << " FILENAME SEED" << std::endl;
+		std::cerr << "Usage: " << argv[0] << " FILENAME STARTING_SEED [N_SEEDS=1] [N_REPS=1]" << std::endl;
 		return 1;
 	}
 
-	// launcher mode
-	if (argc == 4) {
-		PATH_EXISTS = true;
-	}
-	char* filename = argv[1];
-
-	char *parseEnd;
-	unsigned long seed = strtol(argv[2], &parseEnd, 10);
-	if (*parseEnd != '\0') {
-		std::cerr << "SEED must be a number, got " << argv[2] << " instead" << std::endl;
+	// parse command line parameters
+	char *filename = argv[1];
+	unsigned long seed;
+	unsigned int nSeeds = 1;
+	unsigned int nReps = 1;
+	try {
+		seed = std::stoul(argv[2]);
+		if (argc >= 4)
+			nSeeds = std::stoul(argv[3]);
+		if (argc >= 5)
+			nReps = std::stoul(argv[4]);
+	} catch (std::invalid_argument const &e) {
+		std::cerr << "Invalid command line parameter" << std::endl;
 		return 2;
 	}
-	stats s("HDA* Message Passing", N_THREADS, filename, seed);
-	s.timeStep("Start");
-	Graph g = read_graph(filename);
 
+	// launcher mode
+	if (argc >= 6)
+		PATH_EXISTS = true;
+
+	// read graph
+	Graph g = read_graph(filename);
 	unsigned int N = num_vertices(g);
+
 	NodeId source, dest;
 
-	randomize_source_dest(seed, N, source, dest);
-	s.timeStep("Read graph");
+	// monte carlo simulation
+	for (int i = 0; i < nSeeds * nReps; i++) {
+		// randomize seed every nReps runs
+		if (i % nReps == 0)
+			randomize_source_dest(seed, N, source, dest);
 
-	for (int i = 0; i < N_THREADS; i++) {
-		messageQueues[i] = std::make_unique<lockfree::queue<Message>>(FREELIST_SIZE);
-		semaphores[i] = std::make_unique<std::counting_semaphore<N_THREADS>>(0);
-	}
+		std::cerr << "Repetition " << i / nReps << ", " << i % nReps << std::endl;
+		stats s("HDA* Message Passing", N_THREADS, filename, seed);
+		s.timeStep("Start");
 
-	Message m{.type = WORK, .target = (NodeId) source, .parent = (NodeId) source, .fCost = 0, .gCost = 0};
-	messageQueues[hash_node_id(source, N_THREADS)]->push(m);
-	s.timeStep("Queues init");
-
-	for (int i = 0; i < N_THREADS; i++) {
-		threads[i] = std::thread(hdastar_distributed, i, ref(g), source, dest, ref(s));
-	}
-
-	for (int i = 0; i < N_THREADS; i++) {
-		threads[i].join();
-	}
-
-	if (pathReconstructed) {
-		s.timeStep("Path reconstruction");
-		s.printTimeStats();
-
-		// Print paths total cost
-		double cost = 0;
-		for (int i = 1; i < path.size(); i++) {
-			cost += get(edge_weight, g, edge(path[i - 1], path[i], g).first);
+		// init global variables
+		for (int j = 0; j < N_THREADS; j++) {
+			messageQueues[j] = std::make_unique<lockfree::queue<Message>>(FREELIST_SIZE);
+			semaphores[j] = std::make_unique<std::counting_semaphore<N_THREADS>>(0);
 		}
-		std::cout << "Total cost: " << cost << std::endl;
-		std::cout << "Total steps: " << path.size() << std::endl;
 
-		s.setTotalCost(cost);
-		s.setTotalSteps(path.size());
-		s.dump_csv(path);
+		Message m{.type = WORK, .target = (NodeId) source, .parent = (NodeId) source, .fCost = 0, .gCost = 0};
+		messageQueues[hash_node_id(source, N_THREADS)]->push(m);
+		s.timeStep("Queues init");
+
+		// run threads
+		for (int j = 0; j < N_THREADS; j++) {
+			threads[j] = std::thread(hdastar_distributed, j, ref(g), source, dest, ref(s));
+		}
+
+		for (int j = 0; j < N_THREADS; j++) {
+			threads[j].join();
+		}
+
+		// print stats on success
+		if (pathReconstructed) {
+			s.timeStep("Path reconstruction");
+			s.printTimeStats();
+
+			// Print paths total cost
+			double cost = 0;
+			for (int j = 1; j < path.size(); j++) {
+				cost += get(edge_weight, g, edge(path[j - 1], path[j], g).first);
+			}
+			std::cout << "Total cost: " << cost << std::endl;
+			std::cout << "Total steps: " << path.size() << std::endl;
+
+			s.setTotalCost(cost);
+			s.setTotalSteps(path.size());
+			s.dump_csv(path);
+		}
+
+		// cleanup global variables
+		std::fill(finished.begin(), finished.end(), false);
+		pathReconstructed = false;
+		path.clear();
 	}
+
+	return 0;
 }

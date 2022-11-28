@@ -53,12 +53,13 @@ void print_graph(Graph g, std::ostream &os) {
 	write_graphviz_dp(os, g, dp);
 }
 
-void randomize_source_dest(uint64_t seed, uint64_t nodes, NodeId &source, NodeId &dest) {
+void randomize_source_dest(uint64_t &seed, uint64_t nodes, NodeId &source, NodeId &dest) {
 	// Linear congruential generator
 	uint64_t r1 = (seed * LCG_MULTIPLIER + LCG_INCREMENT) % nodes;
 	uint64_t r2 = (r1 * LCG_MULTIPLIER + LCG_INCREMENT) % nodes;
 	source = r1;
 	dest = r2;
+	seed = r2; // update seed for next call
 	std::cerr << "Chosen random source (" << source << ") and dest (" << dest << ")" << std::endl;
 }
 

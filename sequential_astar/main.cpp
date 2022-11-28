@@ -12,13 +12,15 @@ typedef std::pair<unsigned int, double> NodeFCost;
 
 // Reconstruct path from graph and list of costs to nodes
 std::pair<double, std::vector<unsigned int>>
-reconstruct_path(const Graph &g, unsigned int source, unsigned int target, const NodeId *cameFrom, const double *costToCome, const stats& s) {
+reconstruct_path(const Graph &g, unsigned int source, unsigned int target, const NodeId *cameFrom,
+                 const double *costToCome, const stats &s) {
 	std::vector<unsigned int> path;
 	path.emplace_back(target);
 	unsigned int current = target;
 	while (current != source) {
 		if (cameFrom[current] == INVALID_NODE_ID) {
-			std::cerr << "sequential_astar: Error during path reconstruction: Node " << current << " parent not found" << std::endl;
+			std::cerr << "sequential_astar: Error during path reconstruction: Node " << current << " parent not found"
+			          << std::endl;
 			return std::make_pair(0, path);
 		}
 		current = cameFrom[current];
@@ -79,56 +81,62 @@ astar_sequential(const Graph &g, unsigned int source, unsigned int target, stats
 }
 
 int main(int argc, char *argv[]) {
+	// print usage
 	if (argc < 3) {
-		std::cerr << "Usage: " << argv[0] << " FILENAME SEED" << std::endl;
+		std::cerr << "Usage: " << argv[0] << " FILENAME STARTING_SEED [N_SEEDS=1] [N_REPS=1]" << std::endl;
 		return 1;
 	}
-	char* filename = argv[1];
-	char *parseEnd;
 
-	unsigned long seed = strtol(argv[2], &parseEnd, 10);
-	if (*parseEnd != '\0') {
-		std::cerr << "SEED must be a number, got " << argv[2] << " instead" << std::endl;
+	// parse command line parameters
+	char *filename = argv[1];
+	unsigned long seed;
+	unsigned int nSeeds = 1;
+	unsigned int nReps = 1;
+	try {
+		seed = std::stoul(argv[2]);
+		if (argc >= 4)
+			nSeeds = std::stoul(argv[3]);
+		if (argc >= 5)
+			nReps = std::stoul(argv[4]);
+	} catch (std::invalid_argument const &e) {
+		std::cerr << "Invalid command line parameter" << std::endl;
 		return 2;
 	}
 
-	stats s("A*", 1, filename, seed);
-	s.timeStep("Start");
+	// read graph
 	Graph g = read_graph(filename);
-
 	unsigned int N = num_vertices(g);
+
 	NodeId source, dest;
 
-	randomize_source_dest(seed, N, source, dest);
-	s.timeStep("Read graph");
+	// monte carlo simulation
+	for (int i = 0; i < nSeeds * nReps; i++) {
+		// randomize seed every nReps runs
+		if (i % nReps == 0)
+			randomize_source_dest(seed, N, source, dest);
 
-	auto path_pair = astar_sequential(ref(g), source, dest, ref(s));
-	auto path_weight = path_pair.first;
-	auto path = path_pair.second;
+		std::cerr << "Repetition " << i / nReps << ", " << i % nReps << std::endl;
+		stats s("A*", 1, filename, seed);
+		s.timeStep("Start");
 
-	if (path_weight < 0) {
-//		std::cerr << "Unable to find a path" << std::endl;
-		return 3;
+		auto path_pair = astar_sequential(ref(g), source, dest, ref(s));
+		auto path_weight = path_pair.first;
+		auto path = path_pair.second;
+
+		if (path_weight < 0) {
+			return 3;
+		}
+
+		// Print path
+		s.printTimeStats();
+
+		std::cout << "Total cost: " << path_pair.first << std::endl;
+		std::cout << "Total steps: " << path.size() << std::endl;
+
+		s.setTotalCost(path_pair.first);
+		s.setTotalSteps(path_pair.second.size());
+		s.dump_csv(path_pair.second);
 	}
-
-	// Print path
-	std::cout << path_weight << std::endl;
-
-	// Print path
-//	char *fout_filename = (char *) malloc((strlen(filename) + 8) * sizeof(char));
-//	sprintf(fout_filename, "%s.solution", filename);
-//	FILE *fout = fopen(fout_filename, "w");
-//	for (auto el: path) {
-//		std::cout << el << " -> ";
-//		fprintf(fout, "%d\n", el);
-//	}
-//	fclose(fout);
-//	std::cout << std::endl;
-
-	s.printTimeStats();
-	s.setTotalCost(path_pair.first);
-	s.setTotalSteps(path_pair.second.size());
-	s.dump_csv(path_pair.second);
 
 	return 0;
 }
