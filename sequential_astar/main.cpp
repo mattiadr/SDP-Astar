@@ -12,22 +12,20 @@ typedef std::pair<unsigned int, double> NodeFCost;
 
 // Reconstruct path from graph and list of costs to nodes
 std::pair<double, std::vector<unsigned int>>
-reconstruct_path(const Graph &g, unsigned int source, unsigned int target, const NodeId *cameFrom) {
-	double path_weight = 0;
+reconstruct_path(const Graph &g, unsigned int source, unsigned int target, const NodeId *cameFrom, const double *costToCome, const stats& s) {
 	std::vector<unsigned int> path;
 	path.emplace_back(target);
 	unsigned int current = target;
 	while (current != source) {
 		if (cameFrom[current] == INVALID_NODE_ID) {
 			std::cerr << "sequential_astar: Error during path reconstruction: Node " << current << " parent not found" << std::endl;
-			return std::make_pair(path_weight, path);
+			return std::make_pair(0, path);
 		}
 		current = cameFrom[current];
-		path_weight += get(edge_weight, g, edge(current, target, g).first);
 		target = current;
 		path.insert(path.begin(), current);
 	}
-	return std::make_pair(path_weight, path);
+	return std::make_pair(costToCome[target], path);
 }
 
 // Find the best path from source to target node. Prints the results on file
@@ -52,7 +50,7 @@ astar_sequential(const Graph &g, unsigned int source, unsigned int target, stats
 		if (curr == target) {
 			s.timeStep("Astar");
 			// Reconstructing path
-			auto path = reconstruct_path(g, source, target, cameFrom);
+			auto path = reconstruct_path(ref(g), source, target, cameFrom, costToCome, ref(s));
 			s.timeStep("Path reconstruction");
 			return path;
 		}
@@ -104,7 +102,7 @@ int main(int argc, char *argv[]) {
 	randomize_source_dest(seed, N, source, dest);
 	s.timeStep("Read graph");
 
-	auto path_pair = astar_sequential(g, source, dest, s);
+	auto path_pair = astar_sequential(ref(g), source, dest, ref(s));
 	auto path_weight = path_pair.first;
 	auto path = path_pair.second;
 
