@@ -21,10 +21,9 @@ reconstruct_path(const Graph &g, unsigned int source, unsigned int target, const
 		if (cameFrom[current] == INVALID_NODE_ID) {
 			std::cerr << "sequential_astar: Error during path reconstruction: Node " << current << " parent not found"
 			          << std::endl;
-			return std::make_pair(0, path);
+			return std::make_pair(-1, path);
 		}
 		current = cameFrom[current];
-		target = current;
 		path.insert(path.begin(), current);
 	}
 	return std::make_pair(costToCome[target], path);
@@ -111,12 +110,13 @@ int main(int argc, char *argv[]) {
 
 	// monte carlo simulation
 	for (int i = 0; i < nSeeds * nReps; i++) {
+		stats s("A*", 1, filename, seed);
+
 		// randomize seed every nReps runs
 		if (i % nReps == 0)
 			randomize_source_dest(seed, N, source, dest);
 
 		std::cerr << "Repetition " << i / nReps << ", " << i % nReps << std::endl;
-		stats s("A*", 1, filename, seed);
 		s.timeStep("Start");
 
 		auto path_pair = astar_sequential(ref(g), source, dest, ref(s));
@@ -124,16 +124,16 @@ int main(int argc, char *argv[]) {
 		auto path = path_pair.second;
 
 		if (path_weight < 0) {
-			return 3;
+			continue;
 		}
 
 		// Print path
 		s.printTimeStats();
 
-		std::cout << "Total cost: " << path_pair.first << std::endl;
+		std::cout << "Total cost: " << path_weight << std::endl;
 		std::cout << "Total steps: " << path.size() << std::endl;
 
-		s.setTotalCost(path_pair.first);
+		s.setTotalCost(path_weight);
 		s.setTotalSteps(path_pair.second.size());
 		s.dump_csv(path_pair.second);
 	}

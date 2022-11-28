@@ -39,11 +39,10 @@ typedef struct {
 
 const auto queue_comparator = [](const NodeFCost &a, const NodeFCost &b) { return a.second > b.second; };
 
-bool PATH_EXISTS = false;
 std::vector<std::thread> threads(N_THREADS);
 std::vector<std::unique_ptr<lockfree::queue<Message>>> messageQueues(N_THREADS);
 std::barrier barrier(N_THREADS);
-std::vector<bool> finished(N_THREADS);
+bool finished[N_THREADS];
 bool pathReconstructed = false;
 std::vector<NodeId> path;
 std::vector<std::unique_ptr<std::counting_semaphore<N_THREADS>>> semaphores(N_THREADS);
@@ -63,8 +62,6 @@ bool has_finished(double &bestPathWeight) {
 			return false;
 		}
 	}
-	if (PATH_EXISTS && bestPathWeight == DBL_MAX)
-		return false;
 	return true;
 }
 
@@ -251,10 +248,6 @@ int main(int argc, char *argv[]) {
 		return 2;
 	}
 
-	// launcher mode
-	if (argc >= 6)
-		PATH_EXISTS = true;
-
 	// read graph
 	Graph g = read_graph(filename);
 	unsigned int N = num_vertices(g);
@@ -263,12 +256,13 @@ int main(int argc, char *argv[]) {
 
 	// monte carlo simulation
 	for (int i = 0; i < nSeeds * nReps; i++) {
+		stats s("HDA* Message Passing", N_THREADS, filename, seed);
+
 		// randomize seed every nReps runs
 		if (i % nReps == 0)
 			randomize_source_dest(seed, N, source, dest);
 
 		std::cerr << "Repetition " << i / nReps << ", " << i % nReps << std::endl;
-		stats s("HDA* Message Passing", N_THREADS, filename, seed);
 		s.timeStep("Start");
 
 		// init global variables
@@ -309,7 +303,6 @@ int main(int argc, char *argv[]) {
 		}
 
 		// cleanup global variables
-		std::fill(finished.begin(), finished.end(), false);
 		pathReconstructed = false;
 		path.clear();
 	}

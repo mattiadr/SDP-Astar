@@ -31,7 +31,6 @@ typedef std::priority_queue<NodeFCost, std::vector<NodeFCost>, decltype(queue_co
 
 /** globals **/
 
-bool PATH_EXISTS = false;
 std::vector<std::thread> threads(N_THREADS);
 
 // open sets
@@ -54,7 +53,8 @@ std::barrier barrier(N_THREADS);
 
 // path reconstruction
 std::vector<NodeId> path;
-std::vector<bool> finished(N_THREADS);
+//std::vector<bool> finished(N_THREADS);
+bool finished[N_THREADS];
 
 
 /** functions **/
@@ -65,8 +65,6 @@ bool has_finished() {
 			return false;
 		}
 	}
-	if (PATH_EXISTS && bestPathWeight == DBL_MAX)
-		return false;
 	return true;
 }
 
@@ -178,10 +176,6 @@ int main(int argc, char *argv[]) {
 		return 2;
 	}
 
-	// launcher mode
-	if (argc >= 6)
-		PATH_EXISTS = true;
-
 	// read graph
 	Graph g = read_graph(filename);
 	unsigned int N = num_vertices(g);
@@ -190,12 +184,13 @@ int main(int argc, char *argv[]) {
 
 	// monte carlo simulation
 	for (int i = 0; i < nSeeds * nReps; i++) {
+		stats s("HDA* Message Passing", N_THREADS, filename, seed);
+
 		// randomize seed every nReps runs
 		if (i % nReps == 0)
 			randomize_source_dest(seed, N, source, dest);
 
 		std::cerr << "Repetition " << i / nReps << ", " << i % nReps << std::endl;
-		stats s("HDA* Message Passing", N_THREADS, filename, seed);
 		s.timeStep("Start");
 
 		// init open sets
@@ -251,7 +246,6 @@ int main(int argc, char *argv[]) {
 		// cleanup global variables
 		bestPathWeight = DBL_MAX;
 		path.clear();
-		std::fill(finished.begin(), finished.end(), false);
 	}
 
 	return 0;
