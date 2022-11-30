@@ -1,5 +1,5 @@
-
 ![](./imgs/polito_logo_2021_blu.jpg)
+
 # The Path-Planning Algorithm A*
 
 __*System and Device Programming project Quer 1*__
@@ -13,37 +13,41 @@ De Rosa Mattia s303379
 The proposed problem requires to compare the performance of different parallel implementations of the path-planning
 algorithm A*.
 
-The main problems of the parallel versions compared to the sequential ones are the exploration of already explored nodes
-and the termination condition.
+The main problems of the parallel versions compared to the sequential ones are the division of work between the
+different threads and the termination condition.
 
-The first problem is solved assigning each node to a different thread using an hash function so that each thread can
-keep track of the already explored nodes and avoid unnecessary work.
+The first problem is solved by assigning each node to a different thread using an hash function so that each thread can
+keep track of the already explored nodes and avoid repeating work.
 
-The second problem has proven to be the main obstacle we found when implementing the parallel versions of A*. In the
-sequential version once a path is found we are sure that is the best path we can find given the start and end points. In
-the parallel version instead we cannot be sure of the order of exploration of the nodes, so we have to keep
-exploring until all the paths remaining are surely worse than the best found. In simple graphs this will allow the
-sequential version to explore a minimal part of the graph resulting in better performance than the parallel one.
+The second problem has proven to be the main obstacle we found when implementing the parallel versions of A*.
+The first path found by the sequential version is always the best path from the start to the end position, so we can
+terminate the algorithm immediately. This is not true for the parallel version since we can't be sure of the order of
+exploration of the nodes, so we have to keep exploring until all the remaining (partial) paths are worse than the
+current best. Because of the need to explore more paths than needed we expect parallel algorithms to achieve better
+performance on more complex graphs.
 
 ## Implementation
 
-We chose to develop a sequential version to use for reference and 2 parallel versions. One based on shared memory and
-the other one on message passing.
+We developed a sequential version to use for reference and 2 parallel versions: the first based on shared memory and the
+second on message passing.
 
 The algorithms are implemented in C++ with additional boost libraries:
+
 - `boost/graph/adjacency_list` - Graph library used to store the graph as an adjacency list.
 - `boost/lockfree/queue` - Lock-free queues used to implement message-passing queues
 
 In each version of the algorithm we implemented the openSets with a `std::priority_queue` sorted by the estimated path
-length of that node. 
+length of that node.
 
-The cost to come to each node and the parent lookup table are stored in dynamically allocated arrays. We also tried to
-use `std::unordered_map` to lower memory usage, but the loss of performance was not worth it. 
+We initially used the standard library implementation of hash maps (`std::unordered_maps`) for the  "cost to come" and
+parent lookup tables, but we noticed they caused performance and synchronization issues, so we opted to use dynamically
+allocated array to solve them. We think the higher memory usage of this solution was worth it for the performance
+improvements.
 
 ### Input file
 
-The input file represents a 2D map of nodes, each with a couple of coordinates _(x, y)_ that will be imported as an
-undirected weighted graph.
+The input file represents a 2D map of nodes, each defined as a couple of coordinates _(x, y)_ that will be imported as
+an undirected weighted graph.
 
 The graph files are provided as text files with a specific format:
 
@@ -54,15 +58,15 @@ coordx_1 coordy_1
 .
 .
 coordx_n coordy_n
-index_node_j index_node_k weight
+index_node_i index_node_j weight
 .
 .
 .
 index_node_w index_node_z weight
 ```
 
-In the first line there is the number of nodes, after that n lines with the coordinates of each node, and then there is
-the list of each edge using the indexes of the nodes in the list and the weight of the edge.
+The first line represents the number of nodes, followed by n lines containing the coordinates of each node, finally a
+list of edges using the indexes of the nodes in the list and the weight of the edge.
 
 The text file is parsed and a Graph object is created including all the information provided in the input file.
 
@@ -76,40 +80,45 @@ the sequential version, the first path found will be the best one.
 
 ### Parallelism
 
-The parallelism is obtained using `std::thread`, the implementation of threads of C++ standard library. Synchronization
-is managed with `std::barrier` for both version and `std::mutex` is used to protect shared resources in the shared
-version.
+The parallelism is obtained using `std::thread`, the C++ standard library implementation of threads. Thread
+synchronization is managed with multiple primitives:
 
-In the message passing version message queues are implemented using boost lock-free queues. Each thread explore its own
-nodes and add work to the message queues of the other threads. The threads are synchronized every time they have no work
-to do to check for the termination condition.
+- `std:barrier` is used in both versions to check for the termination condition
+- `std:mutex` is used to protect resources in the shared memory version
+- `std:counting_semaphore` is used for path reconstruction in the message passing version
+
+In the message passing version, message queues are implemented using boost lock-free queues. Each thread explores its
+own nodes and adds work to the message queues of the other threads. The threads are synchronized every time they have no
+work to do to check for the termination condition.
 
 In the shared memory version all the shared resources are protected by locks, and the threads are synchronized when
 checking for the termination condition with the same strategy used for message passing.
 
 ### Termination condition
 
-The basic termination condition for a parallel implementation of A* could be to stop every thread as soon as every
-openSet is empty. Without additional constraints this would lead to the exploration of all the graph. To avoid this, we 
-keep track of the best path found so far, and we add a node to the openSet only if its estimated cost is less than the
-best path. In this way we can be sure to explore a node only if there is the possibility to find a better path, and this
-is acceptable only if the heuristic function never overestimates the goal (_admissible_).
+A basic solution for the parallel A* termination condition is to stop every thread as soon as every openSet is empty.
+Without additional constraints this would lead to the full exploration of the graph.
 
-Every time a thread find that its openSet is empty, it hits a barrier, waiting for the other threads. When everyone hit
-the barrier, they can check if every other thread has finished its work, in that case we know that the best path has
-been found and can be reconstructed.
+To avoid this, we keep track of the best path found so far, and we add a node to the openSet only if its estimated
+cost (cost to come + heuristic) is less than the total cost of the best path. In this way we can be sure to explore a
+node only if there is the possibility to find a better path, and this is acceptable only if the heuristic function never
+overestimates the goal (_admissible_).
+
+Every time a thread empties it's openSet, it stops on a barrier, waiting for the other threads to complete their work
+too. After every thread hits the barrier, we check if every openSet is still empty and in that case we terminate and can
+start the path reconstruction phase.
 
 ### Path reconstruction
 
-The path is reconstructed starting from the `cameFrom` array which contains the parent of all the nodes explored,
-starting from the destination node we add the parent to the path until we reach the source node.
+The path is reconstructed using the `cameFrom` array which contains the parent of all the nodes explored. Starting from
+the destination node we add the parent to the path until we reach the source node.
 
 In the shared version the `cameFrom` array is a global variable and the path can be reconstructed by the main thread
-once all the worker threads finished, so we can expect the same performance of the sequential one.
+once all the worker threads terminate, so we can expect similar performance to the sequential version.
 
-In the message passing version instead the information on the parent of a node is known only by the owner of that node,
-and we have to use messages and semaphores to synchronize the threads and reconstruct the path. In this case we can
-expect worse performance compared to the other versions caused by the overhead of the messages and the semaphores.
+In the message passing version the information on the parent of a node is known only by the owner of that node, so we
+have to use messages and semaphores to synchronize the threads and reconstruct the path. In this case we can expect
+worse performance compared to the other versions caused by the overhead of the messages and the semaphores.
 
 ## Results
 
@@ -117,12 +126,14 @@ All the results presented are obtained on a Windows machine with an AMD Ryzen 7 
 logical threads. The executables are compiled using MSVC 17.0 and cmake 3.23.2 with option `-DCMAKE_BUILD_TYPE=Release`
 to optimize the binaries for performance.
 
+[//]: # (TODO: define speedup)
+
 ### Test graphs
 
 To test the performance of the different algorithms we used 5 different graphs, 2 generated with `graph_generation` with
 different sizes and K neighbors and 3 generated starting from real cities using OpenStreetMap API. The edges in the
 graph represents real roads in the cities, and to each type of road has been assigned a different weight to make a more
-realistic simulation. 
+realistic simulation.
 
 - `k-neargraph_1000_20000_30.txt`: 20000 nodes on a 1000x1000 grid. Each node is connected to its 30 nearest neighbors.
 - `k-neargraph_1500_50000_59.txt`: 50000 nodes on a 1500x1500 grid. Each node is connected to its 59 nearest neighbors.
@@ -130,10 +141,10 @@ realistic simulation.
 - `berlin.txt`: 364873 nodes
 - `newyork.txt`: 3946582 nodes. Includes New York and part of Philadelphia
 
-| ![Turin area](./imgs/turin_area.png) | ![Berlin area](./imgs/berlin_area.png) | ![New York area](./imgs/newyork_area.png) |
+| ![Turin area](./imgs/turin_area.png) | ![Berlin area](./imgs/berlin_area.png)
+| ![New York area](./imgs/newyork_area.png) |
 | :--: | :--: | :--: |
 | Turin area | Berlin area | New York area |
-
 
 ### Path reconstruction
 
@@ -156,5 +167,3 @@ slower in all cases due to the overhead of the synchronization of the different 
 ### Results by path length
 
 ### Results by total node visited
-
-
