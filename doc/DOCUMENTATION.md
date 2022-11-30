@@ -2,7 +2,7 @@
 ![](./imgs/polito_logo_2021_blu.jpg)
 # The Path-Planning Algorithm A*
 
-__System and Device Programming project Quer 1__
+__*System and Device Programming project Quer 1*__
 
 D'Andrea Giuseppe s303378
 
@@ -26,6 +26,7 @@ exploring until all the paths remaining are surely worse than the best found. In
 sequential version to explore a minimal part of the graph resulting in better performance than the parallel one.
 
 ## Implementation
+
 We chose to develop a sequential version to use for reference and 2 parallel versions. One based on shared memory and
 the other one on message passing.
 
@@ -74,20 +75,17 @@ cost and follows the triangle inequality, in other words it is _admissible_ and 
 the sequential version, the first path found will be the best one.
 
 ### Parallelism
+
 The parallelism is obtained using `std::thread`, the implementation of threads of C++ standard library. Synchronization
-is managed with `std::barrier` for the message passing version and with `std::counting_semaphore` for the shared memory
+is managed with `std::barrier` for both version and `std::mutex` is used to protect shared resources in the shared
 version.
 
-Message queues are implemented using boost lock-free queues or with single consumer multi producer queues which
-use `std::mutex` to protect from race conditions when adding to the queue.
+In the message passing version message queues are implemented using boost lock-free queues. Each thread explore its own
+nodes and add work to the message queues of the other threads. The threads are synchronized every time they have no work
+to do to check for the termination condition.
 
-Single consumer multi producer queue `scmp_queue.h` has been implemented as an alternative to boost lock-free queues. We
-use two separate queues for reading and for writing, switching them when the reading queue is empty. In this way
-reading from the queue should be lock-free in most cases.
-
-[//]: # (TODO Add something on the shared version)
-
-[//]: # (TODO Add specifics on both parallel algorithms)
+In the shared memory version all the shared resources are protected by locks, and the threads are synchronized when
+checking for the termination condition with the same strategy used for message passing.
 
 ### Termination condition
 
@@ -121,25 +119,35 @@ to optimize the binaries for performance.
 
 ### Test graphs
 
-To test the performance of the different algorithms we used 4 different graphs, 2 generated with `graph_generation` with
-different sizes and K neighbors and 2 generated starting from real cities using OpenStreetMap API. The edges in the
+To test the performance of the different algorithms we used 5 different graphs, 2 generated with `graph_generation` with
+different sizes and K neighbors and 3 generated starting from real cities using OpenStreetMap API. The edges in the
 graph represents real roads in the cities, and to each type of road has been assigned a different weight to make a more
 realistic simulation. 
 
-- `k-neargraph_`
-- `k-neargraph_`
+- `k-neargraph_1000_20000_30.txt`: 20000 nodes on a 1000x1000 grid. Each node is connected to its 30 nearest neighbors.
+- `k-neargraph_1500_50000_59.txt`: 50000 nodes on a 1500x1500 grid. Each node is connected to its 59 nearest neighbors.
+- `turin.txt`: 95228 nodes
 - `berlin.txt`: 364873 nodes
 - `newyork.txt`: 3946582 nodes. Includes New York and part of Philadelphia
 
-[//]: # (TODO add info on k-neargraph)
+| ![Turin area](./imgs/turin_area.png) | ![Berlin area](./imgs/berlin_area.png) | ![New York area](./imgs/newyork_area.png) |
+| :--: | :--: | :--: |
+| Turin area | Berlin area | New York area |
+
 
 ### Path reconstruction
 
-To test path reconstruction time we averaged the time of 100 runs of the algorithms with 20 different source and
+To test path reconstruction time we averaged the time of 750 runs of each algorithm with 150 different source and
 destination points for each graph.
 
+|                      | k-near 20000  | k-near 50000  | Turin         | Berlin        | New York      |
+|----------------------|---------------|---------------|---------------|---------------|---------------|
+| A* Sequential        | 2.390e-06 s   | 3.493e-06 s   | 1.4338e-05 s  | 6.9426e-05 s  | 0.000403660 s |
+| HDA* Shared          | 3.957e-06 s   | 5.057e-06 s   | 1.3706e-05 s  | 6.7179e-05 s  | 0.000399261 s |
+| HDA* Message Passing | 0.000476632 s | 0.001019622 s | 0.001674454 s | 0.008170810 s | 0.044614082 s |
+
 As we expected the time needed for the sequential and the shared version are the same, the message passing instead is
-slower in all cases. 
+slower in all cases due to the overhead of the synchronization of the different threads.
 
 ### Results by type of graph
 
