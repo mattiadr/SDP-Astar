@@ -53,6 +53,10 @@ astar_sequential(const Graph &g, unsigned int source, unsigned int target, stats
 			// Reconstructing path
 			auto path = reconstruct_path(ref(g), source, target, cameFrom, costToCome, ref(s));
 			s.timeStep("Path reconstruction");
+
+			delete[] costToCome;
+			delete[] cameFrom;
+
 			return path;
 		}
 		if (closedSet.find(curr) != closedSet.end())
@@ -109,33 +113,36 @@ int main(int argc, char *argv[]) {
 	NodeId source, dest;
 
 	// monte carlo simulation
-	for (int i = 0; i < nSeeds * nReps; i++) {
-		stats s("A*", 1, filename, seed);
+	for (int k = 0; k < nSeeds; k++) {
+		unsigned int local_seed = seed;
+		for (int i = 0; i < nReps; i++) {
+			stats s("A*", 1, filename, local_seed);
 
-		// randomize seed every nReps runs
-		if (i % nReps == 0)
-			randomize_source_dest(seed, N, source, dest);
+			// randomize seed every nReps runs
+			if (i == 0)
+				randomize_source_dest(seed, N, source, dest);
 
-		std::cerr << "Repetition " << i / nReps << ", " << i % nReps << std::endl;
-		s.timeStep("Start");
+			std::cerr << "Repetition " << k << ", " << i << std::endl;
+			s.timeStep("Start");
 
-		auto path_pair = astar_sequential(ref(g), source, dest, ref(s));
-		auto path_weight = path_pair.first;
-		auto path = path_pair.second;
+			auto path_pair = astar_sequential(ref(g), source, dest, ref(s));
+			auto path_weight = path_pair.first;
+			auto path = path_pair.second;
 
-		if (path_weight < 0) {
-			continue;
+			if (path_weight < 0) {
+				break;
+			}
+
+			// Print path
+			s.printTimeStats();
+
+			std::cout << "Total cost: " << path_weight << std::endl;
+			std::cout << "Total steps: " << path.size() << std::endl;
+
+			s.setTotalCost(path_weight);
+			s.setTotalSteps(path_pair.second.size());
+			s.dump_csv(path_pair.second);
 		}
-
-		// Print path
-		s.printTimeStats();
-
-		std::cout << "Total cost: " << path_weight << std::endl;
-		std::cout << "Total steps: " << path.size() << std::endl;
-
-		s.setTotalCost(path_weight);
-		s.setTotalSteps(path_pair.second.size());
-		s.dump_csv(path_pair.second);
 	}
 
 	return 0;

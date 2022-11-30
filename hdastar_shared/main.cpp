@@ -183,69 +183,77 @@ int main(int argc, char *argv[]) {
 	NodeId source, dest;
 
 	// monte carlo simulation
-	for (int i = 0; i < nSeeds * nReps; i++) {
-		stats s("HDA* Message Passing", N_THREADS, filename, seed);
+	for (int k = 0; k < nSeeds; k++) {
+		unsigned int local_seed = seed;
+		for (int i = 0; i < nReps; i++) {
+			stats s("HDA* Shared Memory", N_THREADS, filename, local_seed);
 
-		// randomize seed every nReps runs
-		if (i % nReps == 0)
-			randomize_source_dest(seed, N, source, dest);
+			// randomize seed every nReps runs
+			if (i % nReps == 0)
+				randomize_source_dest(seed, N, source, dest);
 
-		std::cerr << "Repetition " << i / nReps << ", " << i % nReps << std::endl;
-		s.timeStep("Start");
+			std::cerr << "Repetition " << k << ", " << i << std::endl;
+			s.timeStep("Start");
 
-		// init open sets
-		for (int j = 0; j < N_THREADS; j++) {
-			openSets[j] = std::make_unique<OpenSet>(queue_comparator);
-		}
-
-		// init arrays
-		cameFrom = new NodeId[N];
-		std::fill_n(cameFrom, N, INVALID_NODE_ID);
-
-		costToCome = new double[N];
-		std::fill_n(costToCome, N, DBL_MAX);
-		costToCome[source] = 0;
-
-		// push first node and set cost to come
-		NodeFCost nfc{.node = (NodeId) source, .fCost = 0};
-		openSets[hash_node_id(source, N_THREADS)]->push(nfc);
-		s.timeStep("Init done");
-
-		// run threads
-		for (int j = 0; j < N_THREADS; j++) {
-			threads[j] = std::thread(hdastar_shared, j, ref(g), source, dest, ref(s));
-		}
-
-		for (int j = 0; j < N_THREADS; j++) {
-			threads[j].join();
-		}
-		s.timeStep("Astar");
-
-		// path reconstruction
-		if (!path_reconstruction(ref(g), source, dest, ref(s))) {
-			s.timeStep("Path reconstruction");
-			s.printTimeStats();
-
-			// print paths total cost
-			double cost = 0;
-			for (int j = 1; j < path.size(); j++) {
-				cost += get(edge_weight, g, edge(path[j - 1], path[j], g).first);
+			// init open sets
+			for (int j = 0; j < N_THREADS; j++) {
+				openSets[j] = std::make_unique<OpenSet>(queue_comparator);
 			}
-			std::cout << "Total cost: " << cost << std::endl;
-			std::cout << "Total steps: " << path.size() << std::endl;
 
-			s.setTotalCost(cost);
-			s.setTotalSteps(path.size());
-			s.dump_csv(path);
+			// init arrays
+			cameFrom = new NodeId[N];
+			std::fill_n(cameFrom, N, INVALID_NODE_ID);
+
+			costToCome = new double[N];
+			std::fill_n(costToCome, N, DBL_MAX);
+			costToCome[source] = 0;
+
+			// push first node and set cost to come
+			NodeFCost nfc{.node = (NodeId) source, .fCost = 0};
+			openSets[hash_node_id(source, N_THREADS)]->push(nfc);
+			s.timeStep("Init done");
+
+			// run threads
+			for (int j = 0; j < N_THREADS; j++) {
+				threads[j] = std::thread(hdastar_shared, j, ref(g), source, dest, ref(s));
+			}
+
+			for (int j = 0; j < N_THREADS; j++) {
+				threads[j].join();
+			}
+			s.timeStep("Astar");
+
+			int path_reconstruction_status = path_reconstruction(ref(g), source, dest, ref(s));
+
+			// path reconstruction
+			if (!path_reconstruction_status) {
+				s.timeStep("Path reconstruction");
+				s.printTimeStats();
+
+				// print paths total cost
+				double cost = 0;
+				for (int j = 1; j < path.size(); j++) {
+					cost += get(edge_weight, g, edge(path[j - 1], path[j], g).first);
+				}
+				std::cout << "Total cost: " << cost << std::endl;
+				std::cout << "Total steps: " << path.size() << std::endl;
+
+				s.setTotalCost(cost);
+				s.setTotalSteps(path.size());
+				s.dump_csv(path);
+			}
+
+			// free resources
+			delete[] cameFrom;
+			delete[] costToCome;
+
+			// cleanup global variables
+			bestPathWeight = DBL_MAX;
+			path.clear();
+
+			if (path_reconstruction_status)
+				break;
 		}
-
-		// free resources
-		delete[] cameFrom;
-		delete[] costToCome;
-
-		// cleanup global variables
-		bestPathWeight = DBL_MAX;
-		path.clear();
 	}
 
 	return 0;

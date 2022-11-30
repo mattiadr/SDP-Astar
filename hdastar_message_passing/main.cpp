@@ -255,56 +255,61 @@ int main(int argc, char *argv[]) {
 	NodeId source, dest;
 
 	// monte carlo simulation
-	for (int i = 0; i < nSeeds * nReps; i++) {
-		stats s("HDA* Message Passing", N_THREADS, filename, seed);
+	for (int k = 0; k < nSeeds; k++) {
+		unsigned int local_seed = seed;
+		for (int i = 0; i < nReps; i++) {
+			stats s("HDA* Message Passing", N_THREADS, filename, local_seed);
 
-		// randomize seed every nReps runs
-		if (i % nReps == 0)
-			randomize_source_dest(seed, N, source, dest);
+			// randomize seed every nReps runs
+			if (i % nReps == 0)
+				randomize_source_dest(seed, N, source, dest);
 
-		std::cerr << "Repetition " << i / nReps << ", " << i % nReps << std::endl;
-		s.timeStep("Start");
+			std::cerr << "Repetition " << k << ", " << i << std::endl;
+			s.timeStep("Start");
 
-		// init global variables
-		for (int j = 0; j < N_THREADS; j++) {
-			messageQueues[j] = std::make_unique<lockfree::queue<Message>>(FREELIST_SIZE);
-			semaphores[j] = std::make_unique<std::counting_semaphore<N_THREADS>>(0);
-		}
-
-		Message m{.type = WORK, .target = (NodeId) source, .parent = (NodeId) source, .fCost = 0, .gCost = 0};
-		messageQueues[hash_node_id(source, N_THREADS)]->push(m);
-		s.timeStep("Queues init");
-
-		// run threads
-		for (int j = 0; j < N_THREADS; j++) {
-			threads[j] = std::thread(hdastar_distributed, j, ref(g), source, dest, ref(s));
-		}
-
-		for (int j = 0; j < N_THREADS; j++) {
-			threads[j].join();
-		}
-
-		// print stats on success
-		if (pathReconstructed) {
-			s.timeStep("Path reconstruction");
-			s.printTimeStats();
-
-			// Print paths total cost
-			double cost = 0;
-			for (int j = 1; j < path.size(); j++) {
-				cost += get(edge_weight, g, edge(path[j - 1], path[j], g).first);
+			// init global variables
+			for (int j = 0; j < N_THREADS; j++) {
+				messageQueues[j] = std::make_unique<lockfree::queue<Message>>(FREELIST_SIZE);
+				semaphores[j] = std::make_unique<std::counting_semaphore<N_THREADS>>(0);
 			}
-			std::cout << "Total cost: " << cost << std::endl;
-			std::cout << "Total steps: " << path.size() << std::endl;
 
-			s.setTotalCost(cost);
-			s.setTotalSteps(path.size());
-			s.dump_csv(path);
+			Message m{.type = WORK, .target = (NodeId) source, .parent = (NodeId) source, .fCost = 0, .gCost = 0};
+			messageQueues[hash_node_id(source, N_THREADS)]->push(m);
+			s.timeStep("Queues init");
+
+			// run threads
+			for (int j = 0; j < N_THREADS; j++) {
+				threads[j] = std::thread(hdastar_distributed, j, ref(g), source, dest, ref(s));
+			}
+
+			for (int j = 0; j < N_THREADS; j++) {
+				threads[j].join();
+			}
+
+			// print stats on success
+			if (pathReconstructed) {
+				s.timeStep("Path reconstruction");
+				s.printTimeStats();
+
+				// Print paths total cost
+				double cost = 0;
+				for (int j = 1; j < path.size(); j++) {
+					cost += get(edge_weight, g, edge(path[j - 1], path[j], g).first);
+				}
+				std::cout << "Total cost: " << cost << std::endl;
+				std::cout << "Total steps: " << path.size() << std::endl;
+
+				s.setTotalCost(cost);
+				s.setTotalSteps(path.size());
+				s.dump_csv(path);
+			}
+
+			// cleanup global variables
+			path.clear();
+			if (!pathReconstructed)
+				break;
+			pathReconstructed = false;
 		}
-
-		// cleanup global variables
-		pathReconstructed = false;
-		path.clear();
 	}
 
 	return 0;
