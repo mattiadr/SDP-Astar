@@ -102,8 +102,11 @@ int main(int argc, char *argv[]) {
 					min = ii;
 				}
 			}
-			// print edge (first vertex, second vertex, weight)
-			fprintf(graph_file, "%d %d %lf\n", i, min, weights[i][min]);
+			// print edge (first vertex, second vertex, weight) only if the same edge
+			// with inverted node has not been already inserted
+			if (weights[min][i] != MAX_DOUBLE) {
+				fprintf(graph_file, "%d %d %lf\n", i, min, weights[i][min]);
+			}
 			weights[i][min] = MAX_DOUBLE;
 		}
 	}
