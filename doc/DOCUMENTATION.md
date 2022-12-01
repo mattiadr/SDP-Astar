@@ -141,8 +141,7 @@ realistic simulation.
 - `berlin.txt`: 364873 nodes
 - `newyork.txt`: 3946582 nodes. Includes New York and part of Philadelphia
 
-| ![Turin area](./imgs/turin_area.png) | ![Berlin area](./imgs/berlin_area.png)
-| ![New York area](./imgs/newyork_area.png) |
+| ![Turin area](./imgs/turin_area.png) | ![Berlin area](./imgs/berlin_area.png) | ![New York area](./imgs/newyork_area.png) |
 | :--: | :--: | :--: |
 | Turin area | Berlin area | New York area |
 
@@ -162,8 +161,35 @@ slower in all cases due to the overhead of the synchronization of the different 
 
 ### Results by type of graph
 
-### Results by processor count
+### Speedup by thread count
 
-### Results by path length
+| ![](imgs/k50000_speedup_threads.png) | ![](imgs/turin_speedup_threads.png) |
+| :--: | :--: |
+| k-neighbors 50K | Turin area |
+
+| ![](imgs/berlin_speedup_thread.png) | ![](imgs/newYork_speedup_threads.png) |
+| :--: | :--: |
+| Berlin area | New York area |
+
+As we can see from the figures above the speedup increases alongside the thread count until we reach the number of logical threads on the GPU, where we can see a steep decrease in performance due to the overhead of context switching.
+
+[//]: # (TODO: new york)
+
+### Speedup by path length
+
+As we stated before we expect a lower speedup on smaller or more linear graphs, we can prove this by plotting the
+average execution time against the path length for the various maps.
+
+| ![](./imgs/k50000_speedup_pathLength.png) | ![](./imgs/turin_speedup_pathLength.png) |
+| :--: | :--: |
+| k-neighbors 50K | Turin area |
+
+| ![](./imgs/berlin_speedup_pathLength.png) | ![](./imgs/newYork_speedup_pathLength.png) |
+| :--: | :--: |
+| Berlin area | New York area |
+
+From the resul above we can see that the speedup is higher on more complex graphs for the parallel algorithms.
+This is true except for the SM version on the New York map (the most complex one we tested) where the cause is likely the contention of the shared resources and the overhead of mutexes.
+This can be probably mitigated by increasing the number of threads.
 
 ### Results by total node visited
