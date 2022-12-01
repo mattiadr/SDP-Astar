@@ -141,15 +141,14 @@ realistic simulation.
 - `berlin.txt`: 364873 nodes
 - `newyork.txt`: 3946582 nodes. Includes New York and part of Philadelphia
 
-| ![Turin area](./imgs/turin_area.png) | ![Berlin area](./imgs/berlin_area.png)
-| ![New York area](./imgs/newyork_area.png) |
+| ![Turin area](./imgs/turin_area.png) | ![Berlin area](./imgs/berlin_area.png)| ![New York area](./imgs/newyork_area.png) |
 | :--: | :--: | :--: |
 | Turin area | Berlin area | New York area |
 
 ### Path reconstruction
 
 To test path reconstruction time we averaged the time of 750 runs of each algorithm with 150 different source and
-destination points for each graph.
+destination points for each graph. Parallel versions executed with 16 threads.
 
 |                      | k-near 20000  | k-near 50000  | Turin         | Berlin        | New York      |
 |----------------------|---------------|---------------|---------------|---------------|---------------|
@@ -162,8 +161,67 @@ slower in all cases due to the overhead of the synchronization of the different 
 
 ### Results by type of graph
 
+The two type of graphs considered brought very different results because of how they were created.
+
+When creating a k-neighbors graph we used a relatively high value for k to ensure the graph is well connected,
+for example for the version with 50K nodes we chose k=59 and the graph generated contains more than 1.5M edges.
+
+Graph representing cities instead contains a similar number of edges and nodes. For example New York has
+almost 4M nodes and about 4M edges.
+
+Another difference between these two types of graphs is how the edge weight is calculated: in a k-neighbors graph
+the weight is equal to the euclidean distance of the nodes (the same as the heuristic function), while for the
+city map graphs there is an additional multiplier based on the type of road (larger roads have lower weight over
+the same distance).
+
+This was done to force the A* algorithms to explore multiple paths, instead of just choosing the most straightforward
+one.
+
+For these reasons we can expect the sequential version to explore a minimal number of nodes thanks to the better
+termination condition and to outperform the parallel versions in the k-neighbors graphs.
+
+|                   | Nodes     | Edges     | Edges Multiplier |
+|-------------------|-----------|-----------|------------------|
+| K neighbors 20000 | 20,000    | 78,400    | 3.92x            |
+| K neighbors 50000 | 50,000    | 1,570,551 | 31.4x            |
+| Turin             | 95,228    | 105,173   | 1.1x             |
+| Berlin            | 371,857   | 394,062   | 1.06x            |
+| New York          | 3,946,582 | 4,189,184 | 1.06x            |
+
+
+Average nodes explored on 750 test runs with 150 different source and destination node. Parallel versions executed with
+16 threads.
+
+| Nodes explored    | A*          | HDA* SM    | HDA* MP     |
+|-------------------|-------------|------------|-------------|
+| K neighbors 20000 | 263.793     | 11357.203  | 14499.752   |
+| K neighbors 50000 | 409.48      | 18621.978  | 23976.279   |
+| Turin             | 34105.364   | 67363.382  | 59701.042   |
+| Berlin            | 137729.832  | 250513.697 | 203157.603  |
+| New York          | 1028596.439 | 3748860.55 | 1512746.403 |
+
+As we can see from the table above, the ratio between the explored nodes in parallel A* and sequential A* is much bigger
+for the k-neighbors graphs. Because of this the parallel algorithm has to perform much more work in simpler graphs, so 
+we have a speedup lower than 1.
+
+The tables below show the execution times and speedup relative to the sequential algorithm
+
+| Execution Time (s) | A*       | HDA* SM  | HDA* MP  |
+|--------------------|----------|----------|----------|
+| K neighbors 20000  | 0.000750 | 0.015804 | 0.023570 |
+| K neighbors 50000  | 0.002233 | 0.046271 | 0.081431 |
+| Turin              | 0.023139 | 0.016814 | 0.012732 |
+| Berlin             | 0.115325 | 0.057164 | 0.042795 |
+| New York           | 1.306676 | 0.821321 | 0.324319 |
+
+| Speedup           | A*  | HDA* SM | HDA* MP |
+|-------------------|-----|---------|---------|
+| K neighbors 20000 | 1x  | 0.047x  | 0.031x  |
+| K neighbors 50000 | 1x  | 0.048x  | 0.027x  |
+| Turin             | 1x  | 1.376x  | 1.817x  |
+| Berlin            | 1x  | 2.017x  | 2.695x  |
+| New York          | 1x  | 1.591x  | 4.029x  |
+
 ### Results by processor count
 
 ### Results by path length
-
-### Results by total node visited
