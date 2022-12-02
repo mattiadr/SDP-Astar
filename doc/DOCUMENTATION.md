@@ -2,7 +2,7 @@
 
 # The Path-Planning Algorithm A*
 
-__*System and Device Programming project Quer 1*__
+__*System and Device Programming - Project Quer 1*__
 
 D'Andrea Giuseppe s303378
 
@@ -126,8 +126,6 @@ All the results presented are obtained on a Windows machine with an AMD Ryzen 7 
 logical threads. The executables are compiled using MSVC 17.0 and cmake 3.23.2 with option `-DCMAKE_BUILD_TYPE=Release`
 to optimize the binaries for performance.
 
-[//]: # (TODO: define speedup)
-
 ### Test graphs
 
 To test the performance of the different algorithms we used 5 different graphs, 2 generated with `graph_generation` with
@@ -234,8 +232,6 @@ The tables below show the average execution times and speedup relative to the se
 
 As we can see from the figures above the speedup increases alongside the thread count until we reach the number of
 logical threads on the CPU, where we can see a steep decrease in performance due to the overhead of context switching.
-
-[//]: # (TODO: new york)
 
 ### Speedup by path length
 
