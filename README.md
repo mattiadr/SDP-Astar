@@ -3,7 +3,7 @@
 PoliTO System and Device Programming project Quer 1 (The Path-Planning Algorithm A*)
 
 - D'Andrea Giuseppe s303378
-- De Rosa Mattia 303379
+- De Rosa Mattia s303379
 
 ## Folders structure
 
@@ -52,6 +52,7 @@ Targets:
 - `graph_generation`
 - `sequential_astar`
 - `hdastar_message_passing`
+- `hdastar_shared`
 
 Example:
 ```
