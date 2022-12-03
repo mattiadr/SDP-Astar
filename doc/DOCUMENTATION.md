@@ -83,9 +83,9 @@ the sequential version, the first path found will be the best one.
 The parallelism is obtained using `std::thread`, the C++ standard library implementation of threads. Thread
 synchronization is managed with multiple primitives:
 
-- `std:barrier` is used in both versions to check for the termination condition
-- `std:mutex` is used to protect resources in the shared memory version
-- `std:counting_semaphore` is used for path reconstruction in the message passing version
+- `std::barrier` is used in both versions to check for the termination condition
+- `std::mutex` is used to protect resources in the shared memory version
+- `std::counting_semaphore` is used for path reconstruction in the message passing version
 
 In the message passing version, message queues are implemented using boost lock-free queues. Each thread explores its
 own nodes and adds work to the message queues of the other threads. The threads are synchronized every time they have no
