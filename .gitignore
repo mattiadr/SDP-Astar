@@ -2,3 +2,4 @@
 cmake-build-*
 include/boost_1_80_0
 data
+binaries
