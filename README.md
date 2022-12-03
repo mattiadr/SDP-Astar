@@ -36,9 +36,9 @@ Multiple helper scripts have been used to generate the graphs used to test the a
 
 The different algorithms are contained in the following folders:
 
-- `sequential_astar`: Sequential version of astar
-- `hdastar_message_passing`: Parallel version of hdastar that uses message_passing and barriers to synchronize threads 
-- `hdastar_shared`: Parallel version of hdastar that use shared memory and barriers to synchronize threads
+- `sequential_astar`: Sequential version of A*
+- `hdastar_message_passing`: Parallel version of Hash Distributed A* that uses message_passing and barriers to synchronize threads
+- `hdastar_shared`: Parallel version of Hash Distributed A* that uses shared memory and barriers to synchronize threads
 
 ## Build
 
