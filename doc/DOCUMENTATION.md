@@ -2,7 +2,7 @@
 
 # The Path-Planning Algorithm A*
 
-__*System and Device Programming project Quer 1*__
+__*System and Device Programming - Project Quer 1*__
 
 D'Andrea Giuseppe s303378
 
@@ -126,12 +126,10 @@ All the results presented are obtained on a Windows machine with an AMD Ryzen 7 
 logical threads. The executables are compiled using MSVC 17.0 and cmake 3.23.2 with option `-DCMAKE_BUILD_TYPE=Release`
 to optimize the binaries for performance.
 
-[//]: # (TODO: define speedup)
-
 ### Test graphs
 
 To test the performance of the different algorithms we used 5 different graphs, 2 generated with `graph_generation` with
-different sizes and K neighbors and 3 generated starting from real cities using OpenStreetMap API. The edges in the
+different sizes and k-neighbors and 3 generated starting from real cities using OpenStreetMap API. The edges in the
 graph represents real roads in the cities, and to each type of road has been assigned a different weight to make a more
 realistic simulation.
 
@@ -141,7 +139,7 @@ realistic simulation.
 - `berlin.txt`: 364873 nodes
 - `newyork.txt`: 3946582 nodes. Includes New York and part of Philadelphia
 
-| ![Turin area](./imgs/turin_area.png) | ![Berlin area](./imgs/berlin_area.png)| ![New York area](./imgs/newyork_area.png) |
+| ![Turin area](./imgs/turin_area.png) | ![Berlin area](./imgs/berlin_area.png) | ![New York area](./imgs/newyork_area.png) |
 | :--: | :--: | :--: |
 | Turin area | Berlin area | New York area |
 
@@ -180,48 +178,75 @@ one.
 For these reasons we can expect the sequential version to explore a minimal number of nodes thanks to the better
 termination condition and to outperform the parallel versions in the k-neighbors graphs.
 
-|                   | Nodes     | Edges     | Edges Multiplier |
-|-------------------|-----------|-----------|------------------|
-| K neighbors 20000 | 20,000    | 78,400    | 3.92x            |
-| K neighbors 50000 | 50,000    | 1,570,551 | 31.4x            |
-| Turin             | 95,228    | 105,173   | 1.1x             |
-| Berlin            | 371,857   | 394,062   | 1.06x            |
-| New York          | 3,946,582 | 4,189,184 | 1.06x            |
+|                   |     Nodes |     Edges | Edges/Nodes |
+|-------------------|----------:|----------:|------------:|
+| k-neighbors 20000 |    20,000 |    78,400 |        3.92 |
+| k-neighbors 50000 |    50,000 | 1,570,551 |       31.40 |
+| Turin             |    95,228 |   105,173 |        1.10 |
+| Berlin            |   371,857 |   394,062 |        1.06 |
+| New York          | 3,946,582 | 4,189,184 |        1.06 |
 
 
 Average nodes explored on 750 test runs with 150 different source and destination node. Parallel versions executed with
 16 threads.
 
-| Nodes explored    | A*          | HDA* SM    | HDA* MP     |
-|-------------------|-------------|------------|-------------|
-| K neighbors 20000 | 263.793     | 11357.203  | 14499.752   |
-| K neighbors 50000 | 409.48      | 18621.978  | 23976.279   |
-| Turin             | 34105.364   | 67363.382  | 59701.042   |
-| Berlin            | 137729.832  | 250513.697 | 203157.603  |
-| New York          | 1028596.439 | 3748860.55 | 1512746.403 |
+| Nodes explored    |        A* |   HDA* SM |   HDA* MP |
+|-------------------|----------:|----------:|----------:|
+| k-neighbors 20000 |       263 |    11,357 |    14,499 |
+| k-neighbors 50000 |       409 |    18,621 |    23,976 |
+| Turin             |    34,105 |    67,363 |    59,701 |
+| Berlin            |   137,729 |   250,513 |   203,157 |
+| New York          | 1,028,596 | 3,748,860 | 1,512,746 |
 
 As we can see from the table above, the ratio between the explored nodes in parallel A* and sequential A* is much bigger
 for the k-neighbors graphs. Because of this the parallel algorithm has to perform much more work in simpler graphs, so 
 we have a speedup lower than 1.
 
-The tables below show the execution times and speedup relative to the sequential algorithm
+The tables below show the average execution times and speedup relative to the sequential algorithm.
 
 | Execution Time (s) | A*       | HDA* SM  | HDA* MP  |
 |--------------------|----------|----------|----------|
-| K neighbors 20000  | 0.000750 | 0.015804 | 0.023570 |
-| K neighbors 50000  | 0.002233 | 0.046271 | 0.081431 |
+| k-neighbors 20000  | 0.000750 | 0.015804 | 0.023570 |
+| k-neighbors 50000  | 0.002233 | 0.046271 | 0.081431 |
 | Turin              | 0.023139 | 0.016814 | 0.012732 |
 | Berlin             | 0.115325 | 0.057164 | 0.042795 |
 | New York           | 1.306676 | 0.821321 | 0.324319 |
 
 | Speedup           | A*  | HDA* SM | HDA* MP |
 |-------------------|-----|---------|---------|
-| K neighbors 20000 | 1x  | 0.047x  | 0.031x  |
-| K neighbors 50000 | 1x  | 0.048x  | 0.027x  |
+| k-neighbors 20000 | 1x  | 0.047x  | 0.031x  |
+| k-neighbors 50000 | 1x  | 0.048x  | 0.027x  |
 | Turin             | 1x  | 1.376x  | 1.817x  |
 | Berlin            | 1x  | 2.017x  | 2.695x  |
 | New York          | 1x  | 1.591x  | 4.029x  |
 
-### Results by processor count
+### Speedup by thread count
 
-### Results by path length
+| ![](imgs/k50000_speedup_threads.png) | ![](imgs/turin_speedup_threads.png) |
+| :--: | :--: |
+| k-neighbors 50K | Turin area |
+
+| ![](imgs/berlin_speedup_thread.png) | ![](imgs/newYork_speedup_threads.png) |
+| :--: | :--: |
+| Berlin area | New York area |
+
+As we can see from the figures above the speedup increases alongside the thread count until we reach the number of
+logical threads on the CPU, where we can see a steep decrease in performance due to the overhead of context switching.
+
+### Speedup by path length
+
+As we stated before we expect a lower speedup on smaller or more linear graphs, we can prove this by plotting the
+average execution time against the path length for the various graphs.
+
+| ![](./imgs/k50000_speedup_pathLength.png) | ![](./imgs/turin_speedup_pathLength.png) |
+| :--: | :--: |
+| k-neighbors 50K | Turin area |
+
+| ![](./imgs/berlin_speedup_pathLength.png) | ![](./imgs/newYork_speedup_pathLength.png) |
+| :--: | :--: |
+| Berlin area | New York area |
+
+From the resul above we can see that the speedup is higher on more complex graphs for the parallel algorithms.
+This is true except for the SM version on the New York map (the most complex one we tested) where the cause is likely
+the contention of the shared resources and the overhead of mutexes.
+This can be probably mitigated by increasing the number of threads.
