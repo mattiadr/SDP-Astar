@@ -26,7 +26,8 @@ reconstruct_path(const Graph &g, unsigned int source, unsigned int target, const
 		current = cameFrom[current];
 		path.insert(path.begin(), current);
 	}
-	return std::make_pair(costToCome[target], path);
+	double ret = costToCome[target];
+	return std::make_pair(ret, path);
 }
 
 // Find the best path from source to target node. Prints the results on file
