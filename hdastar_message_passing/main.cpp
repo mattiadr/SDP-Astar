@@ -92,8 +92,8 @@ void process_queue(const unsigned int threadId, Message &m,
 	}
 }
 
-void hdastar_distributed(const unsigned int threadId, const Graph &g, const NodeId &pathStart, const NodeId &pathEnd,
-                         stats &stat) {
+void hdastar_message_passing(const unsigned int threadId, const Graph &g, const NodeId &pathStart, const NodeId &pathEnd,
+							 stats &stat) {
 	std::priority_queue<NodeFCost, std::vector<NodeFCost>, decltype(queue_comparator)> openSet(queue_comparator);
 	unsigned int N = num_vertices(g);
 	double *costToCome = new double[N];
@@ -279,7 +279,7 @@ int main(int argc, char *argv[]) {
 
 			// run threads
 			for (int j = 0; j < N_THREADS; j++) {
-				threads[j] = std::thread(hdastar_distributed, j, ref(g), source, dest, ref(s));
+				threads[j] = std::thread(hdastar_message_passing, j, ref(g), source, dest, ref(s));
 			}
 
 			for (int j = 0; j < N_THREADS; j++) {
