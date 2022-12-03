@@ -5,6 +5,23 @@ PoliTO System and Device Programming project Quer 1 (The Path-Planning Algorithm
 - D'Andrea Giuseppe s303378
 - De Rosa Mattia 303379
 
+## Folders structure
+
+- `binaries` - Precompiled binaries for windows and linux
+- `data` - Graph input files and raw output files
+- `documentation` - Documentation markdown source
+- `graph_generation` - C++ source code for k-neighbors graph generation
+- `hdastar_message_passing` - C++ source code for Hash Distributed A* with message passing
+- `hdastar_shared` - C++ source code for Hash Distributed A* with shared memory
+- `include`
+  - `boost_1_80_0` - Minimal version of Boost C++ Library v1.80.0
+  - `graph_utils` - C++ source code for common operations for the different algorithms
+  - `stats` - C++ source code for stats gathering helper class
+- `scripts` - Python helper scripts
+  - `launcher.py` - Wrapper to run multiple versions of A*
+  - `osm_to_graph.py` - Script to convert OpenStreetMap XML files to graphs
+- `sequential_astar` - C++ source code for sequential A*
+
 ## Graph generation
 
 Multiple helper scripts have been used to generate the graphs used to test the algorithms.
@@ -25,9 +42,7 @@ The different algorithms are contained in the following folders:
 
 ## Build
 
-Precompiled binaries are provided for windows_x86_64 and for linux_x86_64 in the folder:
-
-[//]: # (TODO: generate precompiled binaries and update folder)
+Precompiled binaries are provided for windows_x86_64 and for linux_x86_64 in the folder `binaries`
 
 It is suggested to build the project with _gcc_ on linux or with _MSVC_ on Windows. _MinGW_ on Windows causes issues with the barriers and the parallel versions don't work properly.
 
