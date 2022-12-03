@@ -122,6 +122,8 @@ In the message passing version the information on the parent of a node is known 
 have to use messages and semaphores to synchronize the threads and reconstruct the path. In this case we can expect
 worse performance compared to the other versions caused by the overhead of the messages and the semaphores.
 
+<p style="page-break-after: always;">&nbsp;</p>
+
 ## Results
 
 All the results presented are obtained on a Windows machine with an AMD Ryzen 7 3700X with 8 physical cores and 16
@@ -158,6 +160,8 @@ destination points for each graph. Parallel versions executed with 16 threads.
 
 As we expected the time needed for the sequential and the shared version are the same, the message passing instead is
 slower in all cases due to the overhead of the synchronization of the different threads.
+
+<p style="page-break-after: always;">&nbsp;</p>
 
 ### Results by type of graph
 
@@ -204,6 +208,8 @@ As we can see from the table above, the ratio between the explored nodes in para
 for the k-neighbors graphs. Because of this the parallel algorithm has to perform much more work in simpler graphs, so 
 we have a speedup lower than 1.
 
+<p style="page-break-after: always;">&nbsp;</p>
+
 The tables below show the average execution times and speedup relative to the sequential algorithm.
 
 | Execution Time (s) | A*       | HDA* SM  | HDA* MP  |
@@ -235,6 +241,10 @@ The tables below show the average execution times and speedup relative to the se
 As we can see from the figures above the speedup increases alongside the thread count until we reach the number of
 logical threads on the CPU, where we can see a steep decrease in performance due to the overhead of context switching.
 
+We can also notice from the graphs how the shared memory implementation isn't faster than the sequential until we reach
+an appropriate number of threads for the size of graph. For example, in Turin 10 threads are enough to outperform the
+sequential, while for New York at least 14 threads are needed.
+
 ### Speedup by path length
 
 As we stated before we expect a lower speedup on smaller or more linear graphs, we can prove this by plotting the
@@ -252,5 +262,27 @@ From the resul above we can see that the speedup is higher on more complex graph
 This is true except for the SM version on the New York map (the most complex one we tested) where the cause is likely
 the contention of the shared resources and the overhead of mutexes.
 This can be probably mitigated by increasing the number of threads.
+
+<p style="page-break-after: always;">&nbsp;</p>
+
+## Conclusions
+
+In summary, message passing outperforms the shared version in most cases but to observe an improvement over the
+sequential we need a complex enough graph. K-neighbors graphs without obstacles are too simple to gain an advantage from
+the parallelism, while the sequential with a good heuristic will always find a relatively straight path exploring only a
+minimal part of the graph.
+
+The performance of the shared memory algorithm are drastically affected by the size of the graph and the amount of
+work to do, so a higher thread count is needed for graphs of increasing size to better distribute the work and avoid
+contention.
+
+This project could be extended by implementing different termination conditions, for example using a sum flag, which
+could be implemented with a condition variable, to determine if the thread has finished working. This solution might
+improve the performance over the barrier method since a thread could resume as soon as it receives more work, instead of
+having to wait until all threads reach the barrier.
+
+Another study subject could be determining better weightings for the different road types, to see how performance
+changes between the various algorithms.
+
 
 </div>
