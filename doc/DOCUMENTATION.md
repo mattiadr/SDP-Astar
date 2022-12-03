@@ -1,3 +1,5 @@
+<div style="text-align: justify">
+
 ![](./imgs/polito_logo_2021_blu.jpg)
 
 # The Path-Planning Algorithm A*
@@ -250,3 +252,5 @@ From the resul above we can see that the speedup is higher on more complex graph
 This is true except for the SM version on the New York map (the most complex one we tested) where the cause is likely
 the contention of the shared resources and the overhead of mutexes.
 This can be probably mitigated by increasing the number of threads.
+
+</div>
