@@ -30,7 +30,7 @@ performance on more complex graphs.
 
 ## Implementation
 
-We developed a sequential version to use for reference and 2 parallel versions: the first based on shared memory and the
+We developed a sequential version to use for reference and two parallel versions: the first based on shared memory and the
 second on message passing.
 
 The algorithms are implemented in C++ with additional boost libraries:
@@ -78,7 +78,7 @@ We chose the $L_2$ norm distance from vertex __i__ to destination vertex __d__ a
 it given the coordinates of the nodes with the formula: $$ h(i) = \sqrt{ (d_x - i_x)^2 + (d_y - i_y)^2 } $$
 The weight of the edges in the graph is computed with the same function. This heuristic can never overestimate the
 cost and follows the triangle inequality, in other words it is _admissible_ and _consistent_, so we can be sure that in
-the sequential version, the first path found will be the best one.
+the sequential version, the first path found will be the best one and each node will be explored at most once.
 
 ### Parallelism
 
@@ -137,11 +137,11 @@ different sizes and k-neighbors and 3 generated starting from real cities using 
 graph represents real roads in the cities, and to each type of road has been assigned a different weight to make a more
 realistic simulation.
 
-- `k-neargraph_1000_20000_30.txt`: 20000 nodes on a 1000x1000 grid. Each node is connected to its 30 nearest neighbors.
-- `k-neargraph_1500_50000_59.txt`: 50000 nodes on a 1500x1500 grid. Each node is connected to its 59 nearest neighbors.
-- `turin.txt`: 95228 nodes
-- `berlin.txt`: 364873 nodes
-- `newyork.txt`: 3946582 nodes. Includes New York and part of Philadelphia
+- `k-neargraph_1000_20000_30.txt`: 20,000 nodes on a 1,000x1,000 grid. Each node is connected to its 30 nearest neighbors.
+- `k-neargraph_1500_50000_59.txt`: 50,000 nodes on a 1,500x1,500 grid. Each node is connected to its 59 nearest neighbors.
+- `turin.txt`: 95,228 nodes
+- `berlin.txt`: 364,873 nodes
+- `newyork.txt`: 3,946,582 nodes. Includes New York and part of Philadelphia
 
 | ![Turin area](./imgs/turin_area.png) | ![Berlin area](./imgs/berlin_area.png) | ![New York area](./imgs/newyork_area.png) |
 | :--: | :--: | :--: |
@@ -152,11 +152,11 @@ realistic simulation.
 To test path reconstruction time we averaged the time of 750 runs of each algorithm with 150 different source and
 destination points for each graph. Parallel versions executed with 16 threads.
 
-|                      | k-near 20000  | k-near 50000  | Turin         | Berlin        | New York      |
-|----------------------|---------------|---------------|---------------|---------------|---------------|
-| A* Sequential        | 2.390e-06 s   | 3.493e-06 s   | 1.4338e-05 s  | 6.9426e-05 s  | 0.000403660 s |
-| HDA* Shared          | 3.957e-06 s   | 5.057e-06 s   | 1.3706e-05 s  | 6.7179e-05 s  | 0.000399261 s |
-| HDA* Message Passing | 0.000476632 s | 0.001019622 s | 0.001674454 s | 0.008170810 s | 0.044614082 s |
+| Path reconstruction time (s) | k-near 20000  | k-near 50000  | Turin         | Berlin        | New York      |
+|------------------------------|---------------|---------------|---------------|---------------|---------------|
+| A* Sequential                | 2.390e-06 s   | 3.493e-06 s   | 1.4338e-05 s  | 6.9426e-05 s  | 0.000403660 s |
+| HDA* Shared                  | 3.957e-06 s   | 5.057e-06 s   | 1.3706e-05 s  | 6.7179e-05 s  | 0.000399261 s |
+| HDA* Message Passing         | 0.000476632 s | 0.001019622 s | 0.001674454 s | 0.008170810 s | 0.044614082 s |
 
 As we expected the time needed for the sequential and the shared version are the same, the message passing instead is
 slower in all cases due to the overhead of the synchronization of the different threads.
@@ -258,7 +258,7 @@ average execution time against the path length for the various graphs.
 | :--: | :--: |
 | Berlin area | New York area |
 
-From the resul above we can see that the speedup is higher on more complex graphs for the parallel algorithms.
+From the result above we can see that the speedup is higher on more complex graphs for the parallel algorithms.
 This is true except for the SM version on the New York map (the most complex one we tested) where the cause is likely
 the contention of the shared resources and the overhead of mutexes.
 This can be probably mitigated by increasing the number of threads.
