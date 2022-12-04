@@ -137,8 +137,8 @@ different sizes and k-neighbors and 3 generated starting from real cities using 
 graph represents real roads in the cities, and to each type of road has been assigned a different weight to make a more
 realistic simulation.
 
-- `k-neargraph_1000_20000_30.txt`: 20,000 nodes on a 1,000x1,000 grid. Each node is connected to its 30 nearest neighbors.
-- `k-neargraph_1500_50000_59.txt`: 50,000 nodes on a 1,500x1,500 grid. Each node is connected to its 59 nearest neighbors.
+- `k-neighbors_1000_20000_30.txt`: 20,000 nodes on a 1,000x1,000 grid. Each node is connected to its 30 nearest neighbors.
+- `k-neighbors_1500_50000_59.txt`: 50,000 nodes on a 1,500x1,500 grid. Each node is connected to its 59 nearest neighbors.
 - `turin.txt`: 95,228 nodes
 - `berlin.txt`: 364,873 nodes
 - `newyork.txt`: 3,946,582 nodes. Includes New York and part of Philadelphia
@@ -152,11 +152,11 @@ realistic simulation.
 To test path reconstruction time we averaged the time of 750 runs of each algorithm with 150 different source and
 destination points for each graph. Parallel versions executed with 16 threads.
 
-| Path reconstruction time (s) | k-near 20000  | k-near 50000  | Turin         | Berlin        | New York      |
-|------------------------------|---------------|---------------|---------------|---------------|---------------|
-| A* Sequential                | 2.390e-06 s   | 3.493e-06 s   | 1.4338e-05 s  | 6.9426e-05 s  | 0.000403660 s |
-| HDA* Shared                  | 3.957e-06 s   | 5.057e-06 s   | 1.3706e-05 s  | 6.7179e-05 s  | 0.000399261 s |
-| HDA* Message Passing         | 0.000476632 s | 0.001019622 s | 0.001674454 s | 0.008170810 s | 0.044614082 s |
+| Path reconstruction time (ms) | k-neighbors 20000 | k-neighbors 50000 | Turin    | Berlin   | New York  |
+|-------------------------------|-------------------|-------------------|----------|----------|-----------|
+| A* Sequential                 | 0.002390          | 0.003493          | 0.014338 | 0.069426 |  0.403660 |
+| HDA* Shared                   | 0.003957          | 0.005057          | 0.013706 | 0.067179 |  0.399261 |
+| HDA* Message Passing          | 0.476632          | 1.019622          | 1.674454 | 8.170810 | 44.614082 |
 
 As we expected the time needed for the sequential and the shared version are the same, the message passing instead is
 slower in all cases due to the overhead of the synchronization of the different threads.
@@ -168,7 +168,7 @@ slower in all cases due to the overhead of the synchronization of the different 
 The two type of graphs considered brought very different results because of how they were created.
 
 When creating a k-neighbors graph we used a relatively high value for k to ensure the graph is well connected,
-for example for the version with 50K nodes we chose k=59 and the graph generated contains more than 1.5M edges.
+for example for the version with 50,000 nodes we chose k=59 and the graph generated contains more than 1.5M edges.
 
 Graph representing cities instead contains a similar number of edges and nodes. For example New York has
 almost 4M nodes and about 4M edges.
@@ -232,11 +232,11 @@ The tables below show the average execution times and speedup relative to the se
 
 | ![](imgs/k50000_speedup_threads.png) | ![](imgs/turin_speedup_threads.png) |
 | :--: | :--: |
-| k-neighbors 50K | Turin area |
+| k-neighbors 50000 | Turin |
 
 | ![](imgs/berlin_speedup_thread.png) | ![](imgs/newYork_speedup_threads.png) |
 | :--: | :--: |
-| Berlin area | New York area |
+| Berlin | New York |
 
 As we can see from the figures above the speedup increases alongside the thread count until we reach the number of
 logical threads on the CPU, where we can see a steep decrease in performance due to the overhead of context switching.
@@ -252,13 +252,13 @@ average execution time against the path length for the various graphs.
 
 | ![](./imgs/k50000_speedup_pathLength.png) | ![](./imgs/turin_speedup_pathLength.png) |
 | :--: | :--: |
-| k-neighbors 50K | Turin area |
+| k-neighbors 50000 | Turin |
 
 | ![](./imgs/berlin_speedup_pathLength.png) | ![](./imgs/newYork_speedup_pathLength.png) |
 | :--: | :--: |
-| Berlin area | New York area |
+| Berlin | New York |
 
-From the result above we can see that the speedup is higher on more complex graphs for the parallel algorithms.
+From the results above we can see that the speedup is higher on more complex graphs for the parallel algorithms.
 This is true except for the SM version on the New York map (the most complex one we tested) where the cause is likely
 the contention of the shared resources and the overhead of mutexes.
 This can be probably mitigated by increasing the number of threads.
